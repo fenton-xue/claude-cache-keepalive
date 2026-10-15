@@ -35,6 +35,8 @@ export interface ControllerDeps {
 }
 
 const TICK_MS = 1000;
+/** 未勾选会话的最后请求时间多久重新读取一次 */
+const RELOAD_MS = 60 * 60 * 1000;
 
 /** 把核心模块、设置和界面串起来。不依赖 Electron，便于测试。 */
 export class Controller {
@@ -42,6 +44,7 @@ export class Controller {
   private readonly catalog: Catalog;
   private settings: Settings;
   private timer: NodeJS.Timeout | null = null;
+  private reloadTimer: NodeJS.Timeout | null = null;
   private ticking = false;
   private pushQueued = false;
 
@@ -69,11 +72,18 @@ export class Controller {
     await this.catalog.refresh();
     this.push();
     this.timer = setInterval(() => void this.tick(), TICK_MS);
+    this.reloadTimer = setInterval(() => {
+      void this.catalog
+        .reloadLastRequests(this.settings.dirs.map((d) => d.path))
+        .catch((e) => this.deps.log?.('reload last requests failed', e));
+    }, RELOAD_MS);
   }
 
   stop(): void {
     if (this.timer) clearInterval(this.timer);
+    if (this.reloadTimer) clearInterval(this.reloadTimer);
     this.timer = null;
+    this.reloadTimer = null;
     this.monitor.stopAll();
   }
 
@@ -96,9 +106,8 @@ export class Controller {
     if (this.ticking) return;
     this.ticking = true;
     try {
-      const paths = this.settings.dirs.map((d) => d.path);
       await Promise.all([
-        this.catalog.tick(paths).catch((e) => this.deps.log?.('catalog tick failed', e)),
+        this.catalog.tick().catch((e) => this.deps.log?.('catalog tick failed', e)),
         this.monitor.tick(),
       ]);
       this.push();
@@ -164,8 +173,12 @@ export class Controller {
   }
 
   async setChecked(sessionId: string, on: boolean): Promise<void> {
-    if (on) await this.monitor.check(sessionId);
-    else this.monitor.uncheck(sessionId);
+    if (on) {
+      await this.monitor.check(sessionId);
+    } else {
+      this.monitor.uncheck(sessionId);
+      await this.catalog.reloadLastRequest(sessionId).catch(() => undefined);
+    }
     this.push();
   }
 

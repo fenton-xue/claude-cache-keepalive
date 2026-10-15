@@ -1,5 +1,5 @@
 import type { GroupView, SessionRowView } from '../core/catalog';
-import { describeFailure, humanDuration } from '../core/format';
+import { coarseDuration, describeFailure, humanDuration } from '../core/format';
 import { CACHE_TTL_MS, formatInterval } from '../core/settings';
 import type { KeepaliveApi, UiState } from '../shared/ipc';
 
@@ -45,6 +45,22 @@ function syncChildren(parent: Element, want: Element[]): void {
 }
 
 /* ======================= 会话行 ======================= */
+
+/** 未勾选的会话显示固定的时刻而不是逐秒变化的"X 前"；缓存已失效的时长只按小时、天粗略显示 */
+function clockText(t: number, now: number): string {
+  const d = new Date(t);
+  const sameDay = d.toDateString() === new Date(now).toDateString();
+  const hms2 = d.toTimeString().slice(0, 8);
+  return sameDay ? hms2 : `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${hms2.slice(0, 5)}`;
+}
+
+function sinceText(r: SessionRowView, gone: boolean, now: number): string {
+  if (gone) return '会话已退出';
+  if (r.status === 'busy' || r.status === 'waiting' || r.status === 'shell') return STATUS_TEXT[r.status] as string;
+  if (r.ageMs === null || r.lastRequestAt === null) return '暂无请求记录';
+  if (r.coldMs > 0) return `缓存已失效 ${coarseDuration(r.coldMs)}`;
+  return r.checked ? `最后请求 ${humanDuration(r.ageMs)} 前` : `最后请求 ${clockText(r.lastRequestAt, now)}`;
+}
 
 interface RowEl {
   li: HTMLLIElement;
@@ -107,18 +123,7 @@ function updateRow(re: RowEl, r: SessionRowView, s: UiState): void {
   // 发送点靠近左端时，标签放在刻度右侧，避免和左端的 0:00 重叠
   const room = ($('.track', li).clientWidth * tp) / 100;
   stEl.classList.toggle('after', room < 120);
-  setText(
-    $('.since', li),
-    gone
-      ? '会话已退出'
-      : r.status === 'busy' || r.status === 'waiting' || r.status === 'shell'
-        ? (STATUS_TEXT[r.status] as string)
-        : age === null
-          ? '暂无请求记录'
-          : r.coldMs > 0
-            ? `缓存已失效 ${humanDuration(r.coldMs)}`
-            : `最后请求 ${humanDuration(age)} 前`,
-  );
+  setText($('.since', li), sinceText(r, gone, s.now));
 
   /* 倒计时 */
   const big = $('.big', li);

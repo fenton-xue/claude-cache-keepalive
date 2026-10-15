@@ -124,6 +124,35 @@ describe('Controller 设置', () => {
   });
 });
 
+describe('Controller 最后请求时间', () => {
+  it('取消勾选时更新一次，之后不再自己变化；勾选的会话实时变化', async () => {
+    const t = setup({ content: '1', intervalSec: 270, dirs: [{ path: '/work', collapsed: false }] });
+    t.reg.add({ sessionId: 'a', pid: 1 });
+    t.tr.addUser('a', { timestamp: T0 - 100_000 });
+    await t.c.start();
+    const last = () => t.c.getState().groups[0]!.rows[0]!.lastRequestAt;
+    expect(last()).toBe(T0 - 100_000);
+
+    t.tr.addUser('a', { timestamp: T0 - 50_000, originKind: 'human' });
+    await t.c.tick();
+    expect(last()).toBe(T0 - 100_000); // 未勾选：不跟踪
+
+    await t.c.setChecked('a', true);
+    expect(last()).toBe(T0 - 50_000); // 勾选时以最新记录为基线
+    t.tr.addUser('a', { timestamp: T0 - 20_000, originKind: 'human' });
+    await t.c.tick();
+    expect(last()).toBe(T0 - 20_000); // 勾选中：实时
+
+    t.tr.addUser('a', { timestamp: T0 - 5_000, originKind: 'human' });
+    await t.c.setChecked('a', false);
+    expect(last()).toBe(T0 - 5_000); // 取消勾选时更新一次
+    t.tr.addUser('a', { timestamp: T0 - 1_000, originKind: 'human' });
+    await t.c.tick();
+    expect(last()).toBe(T0 - 5_000);
+    t.c.stop();
+  });
+});
+
 describe('Controller 刷新与推送', () => {
   it('手动刷新：新会话出现，“会话已退出”提示消失', async () => {
     const t = setup({ content: '1', intervalSec: 270, dirs: [{ path: '/work', collapsed: false }] });

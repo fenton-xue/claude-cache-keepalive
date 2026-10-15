@@ -80,8 +80,12 @@ export class Catalog {
     this.resortNext = true;
   }
 
-  /** 更新已知成员的实时数据。dirs 之外的会话不读取记录文件。 */
-  async tick(dirPaths: readonly string[]): Promise<void> {
+  /**
+   * 更新已知成员的状态和可用性（只读注册文件）。
+   * 不读取记录文件：未勾选的会话只在刷新、取消勾选和每小时一次的 reloadLastRequests 里更新最后请求时间，
+   * 勾选的会话由 Monitor 实时跟踪。
+   */
+  async tick(): Promise<void> {
     const entries = (await this.deps.registry.list()).filter(isDesktopSession);
     const live = bestBySessionId(entries, this.deps.probe);
     for (const [id, k] of this.known) {
@@ -93,10 +97,19 @@ export class Catalog {
         k.available = false;
       }
     }
-    const visible = [...this.known.values()]
+  }
+
+  /** 重新读取已添加目录内全部会话的最后请求时间（每小时一次） */
+  async reloadLastRequests(dirPaths: readonly string[]): Promise<void> {
+    const ids = [...this.known.values()]
       .filter((k) => ownerOf(k.entry.cwd, dirPaths) !== null)
       .map((k) => k.entry.sessionId);
-    await this.loadLastRequests(visible);
+    await this.loadLastRequests(ids);
+  }
+
+  /** 取消勾选后，把该会话的最后请求时间更新一次，之后不再自动变化 */
+  async reloadLastRequest(sessionId: string): Promise<void> {
+    await this.loadLastRequests([sessionId]);
   }
 
   /** 目录增删后下一次 view 需要按时间重排（添加目录时调用） */

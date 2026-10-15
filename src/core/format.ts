@@ -39,3 +39,11 @@ export function humanDuration(ms: number): string {
   const r = s % 60;
   return r ? `${m} 分 ${r} 秒` : `${m} 分钟`;
 }
+
+/** 失效时长的粗略说法，只在跨过整小时、整天时才变化：不到 1 小时 / N 小时 / N 天 */
+export function coarseDuration(ms: number): string {
+  const h = Math.floor(ms / 3_600_000);
+  if (h < 1) return '不到 1 小时';
+  if (h < 24) return `${h} 小时`;
+  return `${Math.floor(h / 24)} 天`;
+}

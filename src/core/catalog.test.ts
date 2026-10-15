@@ -83,9 +83,11 @@ describe('Catalog 排序与刷新', () => {
     expect(c.view(d)[0]!.rows.map((r) => r.sessionId)).toEqual(['new', 'old']);
 
     c.tr.addUser('old', { timestamp: T0 - 1 * S });
-    await c.catalog.tick(['/work']);
-    expect(c.view(d)[0]!.rows.map((r) => r.sessionId)).toEqual(['new', 'old']);
-    expect(c.view(d)[0]!.rows[1]!.lastRequestAt).toBe(T0 - 1 * S); // 数据实时更新
+    await c.catalog.tick();
+    expect(c.view(d)[0]!.rows[1]!.lastRequestAt).toBe(T0 - 100 * S); // 未勾选的会话不会自己更新
+    await c.catalog.reloadLastRequests(['/work']);
+    expect(c.view(d)[0]!.rows[1]!.lastRequestAt).toBe(T0 - 1 * S);
+    expect(c.view(d)[0]!.rows.map((r) => r.sessionId)).toEqual(['new', 'old']); // 顺序仍不变
 
     await c.catalog.refresh();
     expect(c.view(d)[0]!.rows.map((r) => r.sessionId)).toEqual(['old', 'new']);
@@ -96,7 +98,7 @@ describe('Catalog 排序与刷新', () => {
     c.reg.add({ sessionId: 'a', pid: 1 });
     await c.catalog.refresh();
     c.reg.add({ sessionId: 'b', pid: 2 });
-    await c.catalog.tick(['/work']);
+    await c.catalog.tick();
     expect(c.view(c.dirs('/work'))[0]!.rows.map((r) => r.sessionId)).toEqual(['a']);
     await c.catalog.refresh();
     expect(c.view(c.dirs('/work'))[0]!.rows.map((r) => r.sessionId).sort()).toEqual(['a', 'b']);
@@ -107,7 +109,7 @@ describe('Catalog 排序与刷新', () => {
     c.reg.add({ sessionId: 'a', pid: 1 });
     await c.catalog.refresh();
     c.reg.remove('a');
-    await c.catalog.tick(['/work']);
+    await c.catalog.tick();
     const row = c.view(c.dirs('/work'))[0]!.rows[0]!;
     expect(row.available).toBe(false);
     expect(row.mode).toBe('unavailable');
@@ -124,10 +126,37 @@ describe('Catalog 排序与刷新', () => {
     await c.catalog.refresh();
     c.view(c.dirs('/work'));
     c.tr.addUser('b', { timestamp: T0 });
-    await c.catalog.tick(['/work']);
+    await c.catalog.reloadLastRequests(['/work']);
     expect(c.view(c.dirs('/work'))[0]!.rows.map((r) => r.sessionId)).toEqual(['a', 'b']);
     c.catalog.requestResort();
     expect(c.view(c.dirs('/work'))[0]!.rows.map((r) => r.sessionId)).toEqual(['b', 'a']);
+  });
+});
+
+describe('Catalog 未勾选会话不实时读取记录', () => {
+  it('tick 不读记录文件；刷新、取消勾选、每小时重读才读', async () => {
+    const c = setup();
+    c.reg.add({ sessionId: 'a', pid: 1 });
+    c.tr.addUser('a', { timestamp: T0 - 10 * S });
+    let reads = 0;
+    const orig = c.tr.peekLast.bind(c.tr);
+    c.tr.peekLast = async (id) => {
+      reads++;
+      return orig(id);
+    };
+    await c.catalog.refresh();
+    expect(reads).toBe(1);
+    for (let i = 0; i < 5; i++) await c.catalog.tick();
+    expect(reads).toBe(1);
+
+    c.tr.addUser('a', { timestamp: T0 - 2 * S });
+    await c.catalog.reloadLastRequest('a');
+    expect(reads).toBe(2);
+    expect(c.view(c.dirs('/work'))[0]!.rows[0]!.lastRequestAt).toBe(T0 - 2 * S);
+    await c.catalog.reloadLastRequests(['/work']);
+    expect(reads).toBe(3);
+    await c.catalog.reloadLastRequests(['/other']); // 目录之外的会话不读取
+    expect(reads).toBe(3);
   });
 });
 
@@ -175,7 +204,7 @@ describe('Catalog 行视图', () => {
     await c.mon.check('a');
     c.reg.remove('a');
     await c.mon.tick();
-    await c.catalog.tick(['/work']);
+    await c.catalog.tick();
     const r = c.view(c.dirs('/work'))[0]!.rows[0]!;
     expect(r).toMatchObject({ checked: false, mode: 'gone', available: false });
     expect(r.note).toContain('会话已退出');
