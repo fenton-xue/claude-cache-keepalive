@@ -139,8 +139,8 @@ describe('Catalog 未勾选会话不实时读取记录', () => {
     c.reg.add({ sessionId: 'a', pid: 1 });
     c.tr.addUser('a', { timestamp: T0 - 10 * S });
     let reads = 0;
-    const orig = c.tr.peekLast.bind(c.tr);
-    c.tr.peekLast = async (id) => {
+    const orig = c.tr.peekLastRequest.bind(c.tr);
+    c.tr.peekLastRequest = async (id) => {
       reads++;
       return orig(id);
     };

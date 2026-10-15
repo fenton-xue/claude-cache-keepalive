@@ -56,10 +56,11 @@ describe('勾选', () => {
   let c: Ctx;
   beforeEach(() => void (c = setup()));
 
-  it('以记录里最后一条 user 记录（含工具返回）的时间为基线', async () => {
+  it('以记录里最后一次请求（含工具返回后发出的请求）的时间为基线', async () => {
     c.reg.add({ sessionId: SID, pid: 100 });
     c.tr.addUser(SID, { timestamp: T0 - 100 * S });
-    c.tr.addUser(SID, { timestamp: T0 - 20 * S, isToolResult: true });
+    c.tr.addAssistant(SID, T0 - 99 * S);
+    c.tr.addToolResult(SID, T0 - 20 * S);
     await c.mon.check(SID);
     const s = c.mon.get(SID)!;
     expect(s.mode).toBe('watching');
@@ -206,7 +207,7 @@ describe('到点发送', () => {
     await watching(c, 10 * S);
     c.reg.get(SID).status = 'busy';
     await step(c, 280 * S);
-    c.tr.addUser(SID, { timestamp: c.clock.now() - 2 * S, isToolResult: true });
+    c.tr.addToolResult(SID, c.clock.now() - 2 * S);
     c.reg.get(SID).status = 'idle';
     await step(c, 1 * S);
     expect(c.sender.sent).toHaveLength(0);
@@ -248,7 +249,7 @@ describe('新请求与连续次数', () => {
     await step(c, 1 * S);
     expect(c.mon.get(SID)!.streak).toBe(1);
     // 目标会话处理这条消息时的工具调用返回
-    c.tr.addUser(SID, { timestamp: c.clock.now() + 2 * S, isToolResult: true });
+    c.tr.addToolResult(SID, c.clock.now() + 2 * S);
     await step(c, 5 * S);
     await cycle();
     expect(c.mon.get(SID)!.streak).toBe(2);
@@ -259,7 +260,7 @@ describe('新请求与连续次数', () => {
     const orig = c.sender.send.bind(c.sender);
     c.sender.send = async (t, b) => {
       const r = await orig(t, b);
-      const rec = c.tr.records.get(SID)!.at(-1)!;
+      const rec = c.tr.records.get(SID)!.at(-1)! as { isMeta: boolean };
       rec.isMeta = true;
       return r;
     };
@@ -301,7 +302,7 @@ describe('新请求与连续次数', () => {
     await watching(c, 10 * S);
     await cycle();
     c.tr.addUser(SID, { timestamp: c.clock.now(), isMeta: true });
-    c.tr.addUser(SID, { timestamp: c.clock.now(), isToolResult: true });
+    c.tr.addToolResult(SID, c.clock.now());
     await step(c, 1 * S);
     expect(c.mon.get(SID)!.streak).toBe(1);
   });
@@ -355,6 +356,43 @@ describe('新请求与连续次数', () => {
   });
 });
 
+describe('最后请求时间：并行工具（实测的故障场景）', () => {
+  let c: Ctx;
+  beforeEach(() => void (c = setup()));
+
+  it('并行工具先返回的结果不算请求，等全部到齐后发出的请求才算', async () => {
+    c.reg.add({ sessionId: SID, pid: 100, status: 'busy' });
+    c.tr.addUser(SID, { timestamp: T0 - 600 * S }); // 请求 A
+    c.tr.addAssistant(SID, T0 - 598 * S); // 两个并行 tool_use
+    c.tr.addAssistant(SID, T0 - 597 * S);
+    await c.mon.check(SID);
+    expect(c.mon.get(SID)!.lastRequestAt).toBe(T0 - 600 * S);
+
+    c.tr.addToolResult(SID, T0 - 480 * S, false); // 第一个工具返回，另一个还在跑
+    await c.mon.tick();
+    expect(c.mon.get(SID)!.lastRequestAt).toBe(T0 - 600 * S);
+
+    c.tr.addToolResult(SID, T0 - 300 * S, false); // 第二个返回：还没有回复，无法确认请求已发出
+    await c.mon.tick();
+    expect(c.mon.get(SID)!.lastRequestAt).toBe(T0 - 600 * S);
+
+    c.tr.addAssistant(SID, T0 - 290 * S); // 回复出现，说明 T0-300 发出了请求
+    await c.mon.tick();
+    expect(c.mon.get(SID)!.lastRequestAt).toBe(T0 - 300 * S);
+  });
+
+  it('用并行结果之后的时间提醒，而不是被先返回的结果拖后', async () => {
+    c.reg.add({ sessionId: SID, pid: 100, status: 'busy' });
+    c.tr.addUser(SID, { timestamp: T0 - 10 * S });
+    c.tr.addAssistant(SID, T0 - 8 * S);
+    await c.mon.check(SID);
+    await step(c, 120 * S);
+    c.tr.addToolResult(SID, c.clock.now(), false); // 先返回的结果
+    await step(c, 150 * S); // 距真正的最后请求 280 秒
+    expect(c.notices.filter((n) => n.kind === 'stalled')).toHaveLength(1);
+  });
+});
+
 describe('忙碌时缓存即将失效的提醒', () => {
   let c: Ctx;
   beforeEach(() => void (c = setup()));
@@ -390,7 +428,7 @@ describe('忙碌时缓存即将失效的提醒', () => {
     c.reg.get(SID).status = 'busy';
     await step(c, 270 * S);
     expect(c.notices).toHaveLength(1);
-    c.tr.addUser(SID, { timestamp: c.clock.now(), isToolResult: true });
+    c.tr.addToolResult(SID, c.clock.now());
     await step(c, 1 * S);
     await step(c, 200 * S);
     expect(c.notices).toHaveLength(1);

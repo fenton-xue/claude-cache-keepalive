@@ -101,7 +101,7 @@ export class Monitor {
       poll = undefined;
     }
     if (this.map.get(sessionId) !== s) return true; // 期间被取消或重新勾选
-    s.lastRequestAt = poll?.lastUser?.timestamp ?? entry.statusUpdatedAt ?? this.deps.clock.now();
+    s.lastRequestAt = poll?.lastRequestAt ?? entry.statusUpdatedAt ?? this.deps.clock.now();
     s.ready = true;
     // 忙碌时不判断过期，等变为 idle 后由 tick 判断
     if (isIdle(entry) && this.deps.clock.now() - s.lastRequestAt > CACHE_TTL_MS) s.mode = 'expired';
@@ -196,6 +196,10 @@ export class Monitor {
     if (this.map.get(s.sessionId) !== s || modeOf(s) === 'gone') return;
     if (poll) {
       this.absorb(s, poll.appended);
+      if (poll.lastRequestAt !== null && (s.lastRequestAt === null || poll.lastRequestAt > s.lastRequestAt)) {
+        s.lastRequestAt = poll.lastRequestAt;
+        s.stallWarned = false;
+      }
     } else if (entry.statusUpdatedAt !== undefined && entry.statusUpdatedAt > (s.lastRequestAt ?? 0)) {
       s.lastRequestAt = entry.statusUpdatedAt; // 记录文件读不到时的退路
     }
@@ -238,7 +242,7 @@ export class Monitor {
     }
   }
 
-  /** 处理新增的 user 记录：刷新最后请求时间；只有真正的新请求才打断连续次数 */
+  /** 处理新增的 user 记录：只有真正的新请求才打断连续次数（最后请求时间由 poll.lastRequestAt 给出） */
   private absorb(s: MonitorState, records: readonly UserRecord[]): void {
     if (records.length === 0) return;
     if (s.mode === 'sending' && !s.pending) {
@@ -248,10 +252,6 @@ export class Monitor {
       return;
     }
     for (const r of records) {
-      if (s.lastRequestAt === null || r.timestamp > s.lastRequestAt) {
-        s.lastRequestAt = r.timestamp;
-        s.stallWarned = false;
-      }
       if (r.originMsgId !== undefined && this.sentIds.has(r.originMsgId)) {
         if (s.pending?.msgId === r.originMsgId) s.pending.matched = true;
         continue;

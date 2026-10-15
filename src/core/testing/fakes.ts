@@ -9,6 +9,7 @@ import type {
   TranscriptSource,
   UserRecord,
 } from '../types';
+import { RequestTracker, type TxRecord } from '../transcript';
 
 export const T0 = Date.parse('2026-10-15T08:00:00.000Z');
 
@@ -62,26 +63,46 @@ export class FakeRegistry implements SessionRegistry, SystemProbe {
   }
 }
 
-/** 假的会话记录：按 sessionId 存 user 记录，poll 的游标语义和真实实现一致 */
+/** 假的会话记录：按 sessionId 存 user / assistant 记录，poll 的游标语义和真实实现一致 */
 export class FakeTranscripts implements TranscriptSource {
-  records = new Map<string, UserRecord[]>();
+  records = new Map<string, TxRecord[]>();
   missing = new Set<string>();
   failing = new Set<string>();
   private cursors = new Map<string, number>();
 
-  addUser(sessionId: string, r: Partial<UserRecord> & { timestamp: number }): UserRecord {
-    const rec: UserRecord = { isToolResult: false, isMeta: false, ...r };
+  private push(sessionId: string, rec: TxRecord): void {
     const list = this.records.get(sessionId) ?? [];
     list.push(rec);
     this.records.set(sessionId, list);
+  }
+
+  addUser(sessionId: string, r: Partial<UserRecord> & { timestamp: number }): UserRecord {
+    const rec = { kind: 'user' as const, isToolResult: false, isMeta: false, ...r };
+    this.push(sessionId, rec);
     return rec;
   }
 
-  async peekLast(sessionId: string): Promise<UserRecord | null | undefined> {
+  addAssistant(sessionId: string, timestamp: number): void {
+    this.push(sessionId, { kind: 'assistant', timestamp });
+  }
+
+  /** 工具返回；answered 为 true 时紧跟一条 assistant 回复（表示下一次请求已发出并得到响应） */
+  addToolResult(sessionId: string, timestamp: number, answered = true): UserRecord {
+    const rec = this.addUser(sessionId, { timestamp, isToolResult: true });
+    if (answered) this.addAssistant(sessionId, timestamp + 1);
+    return rec;
+  }
+
+  private requestTime(sessionId: string): number | null {
+    const t = new RequestTracker();
+    for (const r of this.records.get(sessionId) ?? []) t.feed(r);
+    return t.get();
+  }
+
+  async peekLastRequest(sessionId: string): Promise<number | null | undefined> {
     if (this.failing.has(sessionId)) throw new Error('read error');
     if (this.missing.has(sessionId)) return undefined;
-    const list = this.records.get(sessionId) ?? [];
-    return list[list.length - 1] ?? null;
+    return this.requestTime(sessionId);
   }
 
   async poll(sessionId: string): Promise<TranscriptPoll | undefined> {
@@ -90,10 +111,8 @@ export class FakeTranscripts implements TranscriptSource {
     const list = this.records.get(sessionId) ?? [];
     const cursor = this.cursors.get(sessionId);
     this.cursors.set(sessionId, list.length);
-    return {
-      lastUser: list[list.length - 1] ?? null,
-      appended: cursor === undefined ? [] : list.slice(cursor),
-    };
+    const appended = (cursor === undefined ? [] : list.slice(cursor)).filter((r): r is Extract<TxRecord, { kind: 'user' }> => r.kind === 'user');
+    return { lastRequestAt: this.requestTime(sessionId), appended };
   }
 
   forget(sessionId: string): void {

@@ -42,15 +42,15 @@ export interface SystemProbe {
 }
 
 export interface TranscriptPoll {
-  /** 目前已知的最后一条 user 记录；记录里还没有 user 记录时为 null */
-  lastUser: UserRecord | null;
+  /** 目前已知的最后一次 API 请求发起时间（毫秒，算法见 RequestTracker）；还没有时为 null */
+  lastRequestAt: number | null;
   /** 自上一次 poll 以来新增的 user 记录；第一次 poll 恒为空 */
   appended: UserRecord[];
 }
 
 export interface TranscriptSource {
-  /** 无状态地取最后一条 user 记录。记录文件找不到返回 undefined，没有 user 记录返回 null。 */
-  peekLast(sessionId: string): Promise<UserRecord | null | undefined>;
+  /** 无状态地取最后一次请求发起时间。记录文件找不到返回 undefined，还没有请求返回 null。 */
+  peekLastRequest(sessionId: string): Promise<number | null | undefined>;
   /** 有状态地跟读：第一次建立基线，之后只返回新增。记录文件找不到返回 undefined。 */
   poll(sessionId: string): Promise<TranscriptPoll | undefined>;
   /** 丢弃该会话的跟读游标 */

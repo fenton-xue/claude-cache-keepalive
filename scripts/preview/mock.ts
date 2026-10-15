@@ -146,7 +146,7 @@ void controller.start();
   },
   cold: (name: string) => {
     const e = byName(name);
-    if (e) tr.records.get(e.sessionId)!.push({ timestamp: clock.now() - 320_000, isToolResult: false, isMeta: false });
+    if (e) tr.addUser(e.sessionId, { timestamp: clock.now() - 320_000 });
   },
   fail: (name: string, kind: string) => {
     const e = byName(name);

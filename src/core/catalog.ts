@@ -210,8 +210,8 @@ export class Catalog {
         const k = this.known.get(id);
         if (!k) return;
         try {
-          const last = await this.deps.transcripts.peekLast(id);
-          k.lastRequestAt = last?.timestamp ?? k.entry.statusUpdatedAt ?? null;
+          const last = await this.deps.transcripts.peekLastRequest(id);
+          k.lastRequestAt = last ?? k.entry.statusUpdatedAt ?? null;
         } catch {
           k.lastRequestAt = k.entry.statusUpdatedAt ?? null;
         }

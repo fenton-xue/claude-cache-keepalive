@@ -25,41 +25,60 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
-describe('FsTranscripts.peekLast', () => {
+const toolResult = (s: number) => user(s, {}, [{ type: 'tool_result', tool_use_id: 't' }]);
+const T = (s: number) => Date.parse(iso(s));
+
+describe('FsTranscripts.peekLastRequest', () => {
   it('按文件名在所有子目录里查找；找不到返回 undefined', async () => {
-    expect(await tr.peekLast(SID)).toBeUndefined();
+    expect(await tr.peekLastRequest(SID)).toBeUndefined();
     writeFileSync(file, user(1));
     clock += 10_000; // 越过负缓存时间
-    expect((await tr.peekLast(SID))?.timestamp).toBe(Date.parse(iso(1)));
+    expect(await tr.peekLastRequest(SID)).toBe(T(1));
   });
 
-  it('最后一条 user 记录（含工具返回），忽略其后的 assistant 等其他记录', async () => {
-    writeFileSync(file, user(1) + user(5, {}, [{ type: 'tool_result', tool_use_id: 't' }]) + assistant(9));
-    const r = await tr.peekLast(SID);
-    expect(r).toMatchObject({ timestamp: Date.parse(iso(5)), isToolResult: true });
+  it('请求发起时间：user 记录之后出现 assistant 回复，取该 user 记录的时间（含工具返回）', async () => {
+    writeFileSync(file, user(1) + assistant(2) + toolResult(5) + assistant(9));
+    expect(await tr.peekLastRequest(SID)).toBe(T(5));
+  });
+
+  it('并行工具：先返回的结果不算，取最后一个结果的时间', async () => {
+    writeFileSync(file, user(1) + assistant(2) + assistant(3) + toolResult(100) + toolResult(300) + assistant(310));
+    expect(await tr.peekLastRequest(SID)).toBe(T(300));
+  });
+
+  it('末尾还没有回复的工具返回不算（可能还在等其他并行工具）；末尾的人工输入算', async () => {
+    writeFileSync(file, user(1) + assistant(2) + toolResult(100));
+    expect(await tr.peekLastRequest(SID)).toBe(T(1));
+    appendFileSync(file, assistant(101) + user(200));
+    expect(await tr.peekLastRequest(SID)).toBe(T(200));
+  });
+
+  it('API 报错生成的合成 assistant 不算响应', async () => {
+    writeFileSync(file, user(1) + assistant(2) + toolResult(100) + JSON.stringify({ type: 'assistant', timestamp: iso(101), isApiErrorMessage: true }) + '\n');
+    expect(await tr.peekLastRequest(SID)).toBe(T(1));
   });
 
   it('没有 user 记录返回 null', async () => {
     writeFileSync(file, assistant(1));
-    expect(await tr.peekLast(SID)).toBeNull();
+    expect(await tr.peekLastRequest(SID)).toBeNull();
   });
 
   it('user 记录在很长的行之前，需要向前扩大读取范围', async () => {
     const big = JSON.stringify({ type: 'assistant', timestamp: iso(2), pad: 'x'.repeat(300_000) }) + '\n';
     writeFileSync(file, user(1) + big);
-    expect((await tr.peekLast(SID))?.timestamp).toBe(Date.parse(iso(1)));
+    expect(await tr.peekLastRequest(SID)).toBe(T(1));
   });
 
   it('文件末尾是写了一半的行时忽略它', async () => {
     writeFileSync(file, user(1) + '{"type":"user","timest');
-    expect((await tr.peekLast(SID))?.timestamp).toBe(Date.parse(iso(1)));
+    expect(await tr.peekLastRequest(SID)).toBe(T(1));
   });
 
   it('文件增长后返回新的结果', async () => {
     writeFileSync(file, user(1));
-    expect((await tr.peekLast(SID))?.timestamp).toBe(Date.parse(iso(1)));
+    expect(await tr.peekLastRequest(SID)).toBe(T(1));
     appendFileSync(file, user(7));
-    expect((await tr.peekLast(SID))?.timestamp).toBe(Date.parse(iso(7)));
+    expect(await tr.peekLastRequest(SID)).toBe(T(7));
   });
 });
 
@@ -67,7 +86,7 @@ describe('FsTranscripts.poll', () => {
   it('第一次建立基线且不返回历史；之后只返回新增', async () => {
     writeFileSync(file, user(1) + user(2));
     const first = await tr.poll(SID);
-    expect(first?.lastUser?.timestamp).toBe(Date.parse(iso(2)));
+    expect(first?.lastRequestAt).toBe(Date.parse(iso(2)));
     expect(first?.appended).toEqual([]);
 
     expect((await tr.poll(SID))?.appended).toEqual([]);
@@ -75,7 +94,7 @@ describe('FsTranscripts.poll', () => {
     const next = await tr.poll(SID);
     expect(next?.appended).toHaveLength(1);
     expect(next?.appended[0]).toMatchObject({ originKind: 'peer', originMsgId: 'm1' });
-    expect(next?.lastUser?.timestamp).toBe(Date.parse(iso(4)));
+    expect(next?.lastRequestAt).toBe(Date.parse(iso(4)));
     expect((await tr.poll(SID))?.appended).toEqual([]);
   });
 
@@ -106,7 +125,7 @@ describe('FsTranscripts.poll', () => {
     tr.forget(SID);
     const r = await tr.poll(SID);
     expect(r?.appended).toEqual([]);
-    expect(r?.lastUser?.timestamp).toBe(Date.parse(iso(2)));
+    expect(r?.lastRequestAt).toBe(Date.parse(iso(2)));
   });
 
   it('文件被截断后重建基线', async () => {
@@ -116,7 +135,7 @@ describe('FsTranscripts.poll', () => {
     writeFileSync(file, user(9));
     const r = await tr.poll(SID);
     expect(r?.appended).toEqual([]);
-    expect(r?.lastUser?.timestamp).toBe(Date.parse(iso(9)));
+    expect(r?.lastRequestAt).toBe(Date.parse(iso(9)));
   });
 
   it('找不到记录文件返回 undefined', async () => {
