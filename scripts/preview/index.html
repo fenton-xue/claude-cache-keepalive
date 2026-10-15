@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Cache Keepalive（浏览器预览）</title>
+<link rel="stylesheet" href="/dist/renderer/styles.css">
+</head>
+<body>
+<!-- 与 src/renderer/index.html 的 body 保持一致，仅脚本不同 -->
+<main class="window" aria-label="Claude Cache Keepalive">
+  <form class="settings" id="settings" onsubmit="return false">
+    <div class="field"><label for="content">发送内容</label><input type="text" id="content" value="1" autocomplete="off"></div>
+    <div class="field"><label for="interval">空闲间隔</label><input type="text" id="interval" value="4:30" inputmode="numeric" autocomplete="off"></div>
+    <div class="err" id="interr" role="alert"></div>
+    <div class="banner" id="banner" role="alert" hidden></div>
+  </form>
+  <div class="listhead">
+    <h2>会话</h2><span class="sp"></span>
+    <button class="btn icon" id="add-dir" type="button" title="添加目录" aria-label="添加目录"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg></button>
+    <button class="btn icon" id="refresh" type="button" title="刷新" aria-label="刷新"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8a5.5 5.5 0 1 1-1.7-4"/><path d="M13 2v3h-3"/></svg></button>
+  </div>
+  <div class="cols" id="cols" aria-hidden="true"><span></span><span>会话</span><span>缓存余温</span><span>倒计时</span><span>最近一次发送</span></div>
+  <div class="scroller">
+    <ul class="rows" id="rows"></ul>
+    <div class="empty" id="empty" hidden><b>还没有添加目录</b><div style="margin-bottom:14px">添加项目目录后，其中正在运行的会话会出现在这里。</div><button class="btn primary" id="add-dir-empty" type="button">添加目录</button></div>
+  </div>
+</main>
+<script src="/dist/preview/mock.js"></script>
+<script src="/dist/renderer/renderer.js"></script>
+</body>
+</html>

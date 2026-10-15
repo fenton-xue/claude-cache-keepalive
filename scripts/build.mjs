@@ -1,5 +1,5 @@
 import { build } from 'esbuild';
-import { copyFileSync, mkdirSync, existsSync, rmSync } from 'node:fs';
+import { copyFileSync, cpSync, mkdirSync, existsSync, rmSync } from 'node:fs';
 
 const watch = process.argv.includes('--watch');
 if (!watch) rmSync('dist', { recursive: true, force: true });
@@ -21,6 +21,17 @@ if (existsSync('src/renderer/renderer.ts')) {
     ...common,
     entryPoints: { renderer: 'src/renderer/renderer.ts' },
     outdir: 'dist/renderer',
+    platform: 'browser',
+    format: 'iife',
+    target: 'chrome140',
+  });
+}
+if (existsSync('src/renderer/fonts')) cpSync('src/renderer/fonts', 'dist/renderer/fonts', { recursive: true });
+if (process.argv.includes('--preview')) {
+  await build({
+    ...common,
+    entryPoints: { mock: 'scripts/preview/mock.ts' },
+    outdir: 'dist/preview',
     platform: 'browser',
     format: 'iife',
     target: 'chrome140',

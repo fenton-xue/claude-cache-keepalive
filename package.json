@@ -18,6 +18,7 @@
     "cc-peer": "1.6.8"
   },
   "devDependencies": {
+    "@fontsource-variable/bricolage-grotesque": "5.3.0",
     "@types/node": "26.6.5",
     "electron": "44.7.2",
     "esbuild": "0.28.2",
