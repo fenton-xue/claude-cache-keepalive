@@ -1,0 +1,54 @@
+name: Release
+
+# 推送形如 v1.2.3 的标签时：测试 → 打包 → 生成 dmg → 发布到 GitHub Releases。
+# 也可以在 Actions 页面手动运行，只生成 dmg 作为构建产物，不发布。
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+      - name: 用标签号作为应用版本
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version
+
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run package
+      - run: npm run dmg
+
+      - name: 校验和
+        working-directory: release
+        run: |
+          for f in *.dmg; do shasum -a 256 "$f" > "$f.sha256"; done
+          ls -la
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Keepwarm-dmg
+          path: |
+            release/*.dmg
+            release/*.sha256
+
+      - name: 发布 Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" release/*.dmg release/*.sha256 \
+            --title "Keepwarm $GITHUB_REF_NAME" \
+            --generate-notes \
+            --notes "**安装**：打开 dmg，把 Keepwarm 拖进「应用程序」。应用没有经过 Apple 公证，首次打开请右键选择「打开」；如果提示已损坏，执行 \`xattr -dr com.apple.quarantine /Applications/Keepwarm.app\`。仅支持 Apple 芯片（arm64）的 macOS。"

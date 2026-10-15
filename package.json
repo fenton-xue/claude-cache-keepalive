@@ -14,7 +14,8 @@
     "test:watch": "vitest",
     "build": "node scripts/build.mjs",
     "start": "npm run build && electron .",
-    "package": "npm run build && node scripts/package.mjs"
+    "package": "npm run build && node scripts/package.mjs",
+    "dmg": "node scripts/make-dmg.mjs"
   },
   "dependencies": {
     "cc-peer": "1.6.8"
