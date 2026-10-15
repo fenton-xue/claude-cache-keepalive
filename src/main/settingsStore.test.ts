@@ -2,6 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { DEFAULT_CONTENT } from '../core/settings';
 import { SettingsStore } from './settingsStore';
 
 let dir: string;
@@ -10,7 +11,7 @@ afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
 describe('SettingsStore', () => {
   it('没有文件时用默认值', () => {
-    expect(new SettingsStore(join(dir, 'new')).load()).toEqual({ content: '1', intervalSec: 270, dirs: [] });
+    expect(new SettingsStore(join(dir, 'new')).load()).toEqual({ content: DEFAULT_CONTENT, intervalSec: 270, dirs: [] });
   });
   it('保存后重新加载，目录顺序和折叠状态保留', () => {
     const s = new SettingsStore(join(dir, 'nested'));

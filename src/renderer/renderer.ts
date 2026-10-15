@@ -81,10 +81,9 @@ function buildRow(r: SessionRowView): RowEl {
     </div>
     <div class="life">
       <div class="track"><div class="fill"></div><div class="zone"></div><i class="tick"></i></div>
-      <div class="scale"><span class="s0">0:00</span><span class="st">发送点</span></div>
       <div class="since"></div>
     </div>
-    <div class="count-cell"><div class="big"></div><div class="cap"></div><div class="bars" hidden><i></i></div></div>
+    <div class="count-cell"><div class="bigline"><div class="big"></div><span class="unit"></span></div><div class="cap"></div><div class="bars" hidden><i></i></div></div>
     <div class="result"></div>`;
   return { li, html: '' };
 }
@@ -117,18 +116,15 @@ function updateRow(re: RowEl, r: SessionRowView, s: UiState): void {
   setAttr(fill, 'data-cold', String(age !== null && age > CACHE_TTL_MS));
   $('.tick', li).style.left = `calc(${tp}% - 1px)`;
   $('.zone', li).style.left = `${tp}%`;
-  const stEl = $('.scale .st', li);
-  stEl.style.left = `${tp}%`;
-  setText(stEl, `发送点 ${formatInterval(s.intervalSec)}`);
-  // 发送点靠近左端时，标签放在刻度右侧，避免和左端的 0:00 重叠
-  const room = ($('.track', li).clientWidth * tp) / 100;
-  stEl.classList.toggle('after', room < 120);
+  setAttr($('.track', li), 'title', `发送点 ${formatInterval(s.intervalSec)}`);
   setText($('.since', li), sinceText(r, gone, s.now));
 
   /* 倒计时 */
   const big = $('.big', li);
   const cap = $('.cap', li);
   const bars = $('.bars', li);
+  const unit = $('.unit', li);
+  let unitText = '';
   let bigText = '—';
   let bigCls = 'big dim';
   let capText = '';
@@ -148,7 +144,8 @@ function updateRow(re: RowEl, r: SessionRowView, s: UiState): void {
   } else if (r.mode === 'watching') {
     bigText = mmss(r.countdownMs ?? 0);
     bigCls = 'big';
-    streak('后发送');
+    unitText = '后发送';
+    streak('');
   } else if (r.mode === 'sending') {
     bigText = '发送中';
     bigCls = 'big text';
@@ -167,6 +164,7 @@ function updateRow(re: RowEl, r: SessionRowView, s: UiState): void {
     streak('取消勾选再勾选可恢复');
   }
   setText(big, bigText);
+  setText(unit, unitText);
   setAttr(big, 'class', bigCls);
   setText(cap, capText);
   bars.hidden = !showBars;

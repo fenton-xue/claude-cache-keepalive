@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_CONTENT,
   formatInterval,
   normalizeSettings,
   parseInterval,
@@ -58,8 +59,8 @@ describe('validateContent', () => {
 
 describe('normalizeSettings', () => {
   it('非对象回退默认值', () => {
-    expect(normalizeSettings(null)).toEqual({ content: '1', intervalSec: 270, dirs: [] });
-    expect(normalizeSettings('x')).toEqual({ content: '1', intervalSec: 270, dirs: [] });
+    expect(normalizeSettings(null)).toEqual({ content: DEFAULT_CONTENT, intervalSec: 270, dirs: [] });
+    expect(normalizeSettings('x')).toEqual({ content: DEFAULT_CONTENT, intervalSec: 270, dirs: [] });
   });
   it('坏字段逐项回退，目录去重并保留顺序和折叠状态', () => {
     const s = normalizeSettings({

@@ -2,7 +2,7 @@ export const CACHE_TTL_MS = 5 * 60 * 1000;
 export const MIN_INTERVAL_SEC = 60;
 export const MAX_INTERVAL_SEC = 290;
 export const DEFAULT_INTERVAL_SEC = 270;
-export const DEFAULT_CONTENT = '1';
+export const DEFAULT_CONTENT = "Test message. Don't think. Reply 1.";
 /** 连续保活的总时长上限（秒） */
 export const STREAK_WINDOW_SEC = 7200;
 export const SEND_TIMEOUT_MS = 30_000;
