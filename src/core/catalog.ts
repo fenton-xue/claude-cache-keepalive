@@ -104,6 +104,11 @@ export class Catalog {
     this.resortNext = true;
   }
 
+  /** 归属于某个目录的全部已知会话（不影响排序状态） */
+  sessionIdsIn(dirPaths: readonly string[], dir: string): string[] {
+    return [...this.known.values()].filter((k) => ownerOf(k.entry.cwd, dirPaths) === dir).map((k) => k.entry.sessionId);
+  }
+
   view(dirs: readonly DirSetting[], states: ReadonlyMap<string, MonitorState>, intervalSec: number): GroupView[] {
     const now = this.deps.clock.now();
     const paths = dirs.map((d) => d.path);

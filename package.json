@@ -23,5 +23,9 @@
     "esbuild": "0.28.2",
     "typescript": "7.0.2",
     "vitest": "5.0.4"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "electron@44.7.2": true
   }
 }
