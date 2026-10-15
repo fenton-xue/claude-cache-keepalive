@@ -244,7 +244,9 @@ export class Monitor {
         if (s.pending?.msgId === r.originMsgId) s.pending.matched = true;
         continue;
       }
-      if (r.isToolResult || r.isMeta) continue;
+      // 工具返回、系统注入的伴随记录（isMeta 且不是 peer 消息）只刷新时间。
+      // 实测：其他会话发来的 peer 消息在记录里同样带 isMeta: true，它们是新请求。
+      if (r.isToolResult || (r.isMeta && r.originKind !== 'peer')) continue;
       s.streak = 0; // 人工输入或其他会话发来的消息
     }
     this.changed();

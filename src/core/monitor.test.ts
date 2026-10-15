@@ -254,6 +254,21 @@ describe('新请求与连续次数', () => {
     expect(c.mon.get(SID)!.streak).toBe(2);
   });
 
+  it('本程序自己的消息即使带 isMeta 也不打断连续次数', async () => {
+    await watching(c, 10 * S);
+    const orig = c.sender.send.bind(c.sender);
+    c.sender.send = async (t, b) => {
+      const r = await orig(t, b);
+      const rec = c.tr.records.get(SID)!.at(-1)!;
+      rec.isMeta = true;
+      return r;
+    };
+    await step(c, 260 * S);
+    await step(c, 1 * S);
+    await step(c, 1 * S);
+    expect(c.mon.get(SID)!.streak).toBe(1);
+  });
+
   it('人工输入是新请求：连续次数归零，倒计时重新起算，不发送', async () => {
     await watching(c, 10 * S);
     await cycle();
@@ -274,7 +289,15 @@ describe('新请求与连续次数', () => {
     expect(c.mon.get(SID)!.streak).toBe(0);
   });
 
-  it('isMeta 的伴随记录和工具返回只刷新时间，不打断次数', async () => {
+  it('实测：peer 消息的记录带 isMeta: true，仍算新请求', async () => {
+    await watching(c, 10 * S);
+    await cycle();
+    c.tr.addUser(SID, { timestamp: c.clock.now(), isMeta: true, originKind: 'peer', originMsgId: 'someone-else' });
+    await step(c, 1 * S);
+    expect(c.mon.get(SID)!.streak).toBe(0);
+  });
+
+  it('没有 origin 的 isMeta 伴随记录和工具返回只刷新时间，不打断次数', async () => {
     await watching(c, 10 * S);
     await cycle();
     c.tr.addUser(SID, { timestamp: c.clock.now(), isMeta: true });
