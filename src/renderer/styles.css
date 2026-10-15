@@ -27,10 +27,16 @@ button,input{font:inherit;color:inherit}
 
 .window{height:100vh;display:flex;flex-direction:column;container-type:inline-size;background:var(--paper)}
 
+/* ---------- 标题栏：与页面同色，红绿灯悬在内容上方 ---------- */
+.titlebar{
+  flex:none;height:38px;display:flex;align-items:center;justify-content:center;
+  font-weight:600;color:var(--ink-2);user-select:none;-webkit-app-region:drag;
+}
+
 /* ---------- 设置 ---------- */
 .settings{
   display:grid;grid-template-columns:minmax(0,1fr) 120px;gap:8px 20px;
-  padding:20px 24px 18px;border-bottom:1px solid var(--line);flex:none;
+  padding:8px 24px 18px;border-bottom:1px solid var(--line);flex:none;
 }
 .settings .err,.settings .banner{grid-column:1 / 3;margin:0}
 .field label{display:block;font-weight:600;margin-bottom:6px}
@@ -159,6 +165,7 @@ button,input{font:inherit;color:inherit}
 .result .btn{margin-top:6px}
 
 .empty{padding:56px 24px;text-align:center;color:var(--ink-2)}
+.empty .hint{margin-bottom:14px}
 .empty b{display:block;font:700 17px/1.3 var(--display);color:var(--ink);margin-bottom:6px}
 
 /* 窄窗口：折叠为两行 */

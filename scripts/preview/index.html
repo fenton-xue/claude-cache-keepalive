@@ -9,6 +9,7 @@
 <body>
 <!-- 与 src/renderer/index.html 的 body 保持一致，仅脚本不同 -->
 <main class="window" aria-label="Claude Cache Keepalive">
+  <div class="titlebar" aria-hidden="true">Claude Cache Keepalive</div>
   <form class="settings" id="settings" onsubmit="return false">
     <div class="field"><label for="content">发送内容</label><input type="text" id="content" value="1" autocomplete="off"></div>
     <div class="field"><label for="interval">空闲间隔</label><input type="text" id="interval" value="4:30" inputmode="numeric" autocomplete="off"></div>
@@ -23,7 +24,7 @@
   <div class="cols" id="cols" aria-hidden="true"><span></span><span>会话</span><span>缓存余温</span><span>倒计时</span><span>最近一次发送</span></div>
   <div class="scroller">
     <ul class="rows" id="rows"></ul>
-    <div class="empty" id="empty" hidden><b>还没有添加目录</b><div style="margin-bottom:14px">添加项目目录后，其中正在运行的会话会出现在这里。</div><button class="btn primary" id="add-dir-empty" type="button">添加目录</button></div>
+    <div class="empty" id="empty" hidden><b>还没有添加目录</b><div class="hint">添加项目目录后，其中正在运行的会话会出现在这里。</div><button class="btn primary" id="add-dir-empty" type="button">添加目录</button></div>
   </div>
 </main>
 <script src="/dist/preview/mock.js"></script>

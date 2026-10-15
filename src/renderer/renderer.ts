@@ -237,7 +237,6 @@ function updateGroup(ge: GroupEl, g: GroupView): void {
 
   const sm = g.summary;
   const parts: string[] = [];
-  if (g.collapsed) parts.push(`<span>${sm.sessions} 个会话</span>`);
   if (sm.monitoring) parts.push(`<span class="mon">监控中 ${sm.monitoring}</span>`);
   if (sm.expired) parts.push(`<span class="cold">已失效 ${sm.expired}</span>`);
   if (sm.failed) parts.push(`<span class="bad">失败 ${sm.failed}</span>`);

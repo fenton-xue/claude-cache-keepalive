@@ -9,6 +9,7 @@
 </head>
 <body>
 <main class="window" aria-label="Claude Cache Keepalive">
+  <div class="titlebar" aria-hidden="true">Claude Cache Keepalive</div>
   <form class="settings" id="settings" onsubmit="return false">
     <div class="field">
       <label for="content">发送内容</label>
@@ -40,7 +41,7 @@
     <ul class="rows" id="rows"></ul>
     <div class="empty" id="empty" hidden>
       <b>还没有添加目录</b>
-      <div style="margin-bottom:14px">添加项目目录后，其中正在运行的会话会出现在这里。</div>
+      <div class="hint">添加项目目录后，其中正在运行的会话会出现在这里。</div>
       <button class="btn primary" id="add-dir-empty" type="button">添加目录</button>
     </div>
   </div>
