@@ -101,8 +101,12 @@ function updateRow(re: RowEl, r: SessionRowView, s: UiState): void {
   setAttr(fill, 'data-cold', String(age !== null && age > CACHE_TTL_MS));
   $('.tick', li).style.left = `calc(${tp}% - 1px)`;
   $('.zone', li).style.left = `${tp}%`;
-  $('.scale .st', li).style.left = `${tp}%`;
-  setText($('.scale .st', li), `发送点 ${formatInterval(s.intervalSec)}`);
+  const stEl = $('.scale .st', li);
+  stEl.style.left = `${tp}%`;
+  setText(stEl, `发送点 ${formatInterval(s.intervalSec)}`);
+  // 发送点靠近左端时，标签放在刻度右侧，避免和左端的 0:00 重叠
+  const room = ($('.track', li).clientWidth * tp) / 100;
+  stEl.classList.toggle('after', room < 120);
   setText(
     $('.since', li),
     gone

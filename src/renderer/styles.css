@@ -143,6 +143,7 @@ button,input{font:inherit;color:inherit}
 .scale span{position:absolute;top:0;white-space:nowrap}
 .scale .s0{left:0}
 .scale .st{transform:translateX(-100%);padding-right:5px;color:var(--ink-2)}
+.scale .st.after{transform:none;padding:0 0 0 5px}
 .since{font-size:12px;color:var(--ink-2)}
 
 /* 倒计时 */
