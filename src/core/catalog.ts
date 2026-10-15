@@ -2,7 +2,7 @@ import { dirLabels, ownerOf, stableOrder, subPath } from './directories';
 import type { SendResult } from './format';
 import { countdownMs, type Mode, type MonitorState } from './monitor';
 import { bestBySessionId, displayName, isAvailable, isDesktopSession } from './sessions';
-import { CACHE_TTL_MS, streakCap, type DirSetting } from './settings';
+import { CACHE_TTL_MS, STALL_WARN_MS, streakCap, type DirSetting } from './settings';
 import type { Clock, RegistryEntry, SessionRegistry, SessionStatus, SystemProbe, TranscriptSource } from './types';
 
 interface Known {
@@ -26,6 +26,8 @@ export interface SessionRowView {
   mode: RowMode;
   /** 监控中且会话非空闲：到点也不发送，等变为空闲 */
   waitingIdle: boolean;
+  /** 忙碌中且缓存快失效 / 已失效：无法保活，提醒用户 */
+  stall: 'none' | 'soon' | 'expired';
   lastRequestAt: number | null;
   /** 距最后一次请求的毫秒数 */
   ageMs: number | null;
@@ -178,6 +180,7 @@ export class Catalog {
     const lastRequestAt = s?.lastRequestAt ?? k.lastRequestAt;
     const ageMs = lastRequestAt === null ? null : Math.max(0, now - lastRequestAt);
     const mode: RowMode = s ? s.mode : k.available ? 'off' : 'unavailable';
+    const waitingIdle = mode === 'watching' && e.status !== undefined && e.status !== 'idle';
     return {
       sessionId: e.sessionId,
       name: displayName(e),
@@ -188,7 +191,8 @@ export class Catalog {
       available: k.available,
       checked,
       mode,
-      waitingIdle: mode === 'watching' && e.status !== undefined && e.status !== 'idle',
+      waitingIdle,
+      stall: !waitingIdle || ageMs === null ? 'none' : ageMs >= CACHE_TTL_MS ? 'expired' : ageMs >= STALL_WARN_MS ? 'soon' : 'none',
       lastRequestAt,
       ageMs,
       coldMs: ageMs !== null && ageMs > CACHE_TTL_MS ? ageMs - CACHE_TTL_MS : 0,

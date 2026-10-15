@@ -1,5 +1,5 @@
 import { describeFailure, type SendResult } from './format';
-import { CACHE_TTL_MS, SEND_TIMEOUT_MS, streakCap } from './settings';
+import { CACHE_TTL_MS, SEND_TIMEOUT_MS, STALL_WARN_MS, streakCap } from './settings';
 import { displayName, findBySessionId, isAvailable } from './sessions';
 import type {
   Clock,
@@ -30,6 +30,8 @@ export interface MonitorState {
   note?: string;
   /** 已发出、等待判定的消息 */
   pending: { msgId: string; sentAt: number; matched: boolean } | null;
+  /** 本轮忙碌已经提醒过“缓存即将失效”；有新请求或会话回到空闲后清除 */
+  stallWarned: boolean;
 }
 
 export interface MonitorDeps {
@@ -87,6 +89,7 @@ export class Monitor {
       lastRequestAt: null,
       lastResult: null,
       pending: null,
+      stallWarned: false,
     };
     this.map.set(sessionId, s);
     this.changed();
@@ -214,7 +217,13 @@ export class Monitor {
           this.markCapped(s);
           return;
         }
-        if (!isIdle(entry) || s.lastRequestAt === null) return;
+        if (s.lastRequestAt === null) return;
+        if (!isIdle(entry)) {
+          // 忙碌时不发送也无法保活，但缓存快失效时要让用户知道
+          if (!s.stallWarned && now - s.lastRequestAt >= STALL_WARN_MS) this.warnStall(s, now);
+          return;
+        }
+        s.stallWarned = false;
         const elapsed = now - s.lastRequestAt;
         if (elapsed > CACHE_TTL_MS) {
           s.mode = 'expired';
@@ -239,7 +248,10 @@ export class Monitor {
       return;
     }
     for (const r of records) {
-      if (s.lastRequestAt === null || r.timestamp > s.lastRequestAt) s.lastRequestAt = r.timestamp;
+      if (s.lastRequestAt === null || r.timestamp > s.lastRequestAt) {
+        s.lastRequestAt = r.timestamp;
+        s.stallWarned = false;
+      }
       if (r.originMsgId !== undefined && this.sentIds.has(r.originMsgId)) {
         if (s.pending?.msgId === r.originMsgId) s.pending.matched = true;
         continue;
@@ -322,6 +334,18 @@ export class Monitor {
       title: '缓存保活：发送失败',
       body: `「${s.name}」${title}${detail ? `：${detail}` : ''}`,
     });
+  }
+
+  private warnStall(s: MonitorState, now: number): void {
+    s.stallWarned = true;
+    const secs = Math.floor((now - (s.lastRequestAt ?? now)) / 1000);
+    this.deps.notify({
+      kind: 'stalled',
+      sessionId: s.sessionId,
+      title: '缓存保活：缓存即将失效',
+      body: `「${s.name}」仍在执行任务，距上次请求已 ${Math.floor(secs / 60)} 分 ${secs % 60} 秒，忙碌中无法保活。如果是卡住的工具，可以手动中断。`,
+    });
+    this.changed();
   }
 
   private markCapped(s: MonitorState): void {

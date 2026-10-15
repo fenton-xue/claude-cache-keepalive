@@ -129,6 +129,7 @@ function updateRow(re: RowEl, r: SessionRowView, s: UiState): void {
   let bigCls = 'big dim';
   let capText = '';
   let showBars = false;
+  let capWarn = false;
   const streak = (lead: string) => {
     capText = `${lead ? `${lead}\n` : ''}已连续 ${r.streak} / ${r.cap}`;
     showBars = true;
@@ -140,7 +141,8 @@ function updateRow(re: RowEl, r: SessionRowView, s: UiState): void {
   } else if (r.mode === 'watching' && r.waitingIdle) {
     bigText = '等待空闲';
     bigCls = 'big text';
-    streak('空闲后再判断');
+    streak(r.stall === 'expired' ? '缓存已失效' : r.stall === 'soon' ? '缓存即将失效，忙碌中无法保活' : '空闲后再判断');
+    capWarn = r.stall !== 'none';
   } else if (r.mode === 'watching') {
     bigText = mmss(r.countdownMs ?? 0);
     bigCls = 'big';
@@ -167,6 +169,7 @@ function updateRow(re: RowEl, r: SessionRowView, s: UiState): void {
   setText(unit, unitText);
   setAttr(big, 'class', bigCls);
   setText(cap, capText);
+  cap.classList.toggle('warn', capWarn);
   bars.hidden = !showBars;
   $('i', bars).style.width = `${r.cap > 0 ? Math.min(100, (r.streak / r.cap) * 100) : 0}%`;
 

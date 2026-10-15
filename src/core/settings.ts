@@ -1,4 +1,6 @@
 export const CACHE_TTL_MS = 5 * 60 * 1000;
+/** 会话忙碌时，距上次请求达到这个时长就提醒：缓存还有 30 秒失效，但忙碌中无法保活 */
+export const STALL_WARN_MS = CACHE_TTL_MS - 30_000;
 export const MIN_INTERVAL_SEC = 60;
 export const MAX_INTERVAL_SEC = 290;
 export const DEFAULT_INTERVAL_SEC = 270;

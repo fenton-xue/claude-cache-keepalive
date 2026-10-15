@@ -196,6 +196,23 @@ describe('Catalog 行视图', () => {
     expect(g.summary).toEqual({ sessions: 3, monitoring: 2, expired: 0, failed: 0 });
   });
 
+  it('忙碌中的监控：距上次请求达到 4:30 为 soon，超过 5 分钟为 expired，其余 none', async () => {
+    const c = setup();
+    c.reg.add({ sessionId: 'a', pid: 1, status: 'busy' });
+    c.tr.addUser('a', { timestamp: T0 - 10 * S });
+    await c.catalog.refresh();
+    await c.mon.check('a');
+    const stall = () => c.view(c.dirs('/work'))[0]!.rows[0]!.stall;
+    expect(stall()).toBe('none');
+    c.clock.advance(260 * S);
+    expect(stall()).toBe('soon');
+    c.clock.advance(40 * S);
+    expect(stall()).toBe('expired');
+    c.reg.get('a').status = 'idle';
+    await c.catalog.tick();
+    expect(stall()).toBe('none');
+  });
+
   it('已退出的监控显示提示且不算勾选', async () => {
     const c = setup();
     c.reg.add({ sessionId: 'a', pid: 1 });

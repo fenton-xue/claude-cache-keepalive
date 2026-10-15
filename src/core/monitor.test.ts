@@ -355,6 +355,67 @@ describe('新请求与连续次数', () => {
   });
 });
 
+describe('忙碌时缓存即将失效的提醒', () => {
+  let c: Ctx;
+  beforeEach(() => void (c = setup()));
+
+  it('忙碌且距上次请求达到 4:30：提醒一次，不发送；之后不重复', async () => {
+    await watching(c, 10 * S);
+    c.reg.get(SID).status = 'busy';
+    await step(c, 200 * S); // 210 秒
+    expect(c.notices).toHaveLength(0);
+    await step(c, 60 * S); // 270 秒
+    expect(c.notices).toHaveLength(1);
+    expect(c.notices[0]).toMatchObject({ kind: 'stalled', sessionId: SID });
+    expect(c.notices[0]!.body).toContain('「A」');
+    expect(c.notices[0]!.body).toContain('4 分 30 秒');
+    await step(c, 120 * S);
+    await step(c, 120 * S);
+    expect(c.notices).toHaveLength(1);
+    expect(c.sender.sent).toHaveLength(0);
+  });
+
+  it('提醒按固定的 4:30，与空闲间隔设置无关', async () => {
+    c.settings.intervalSec = 60;
+    await watching(c, 10 * S);
+    c.reg.get(SID).status = 'busy';
+    await step(c, 120 * S);
+    expect(c.notices).toHaveLength(0);
+    await step(c, 150 * S);
+    expect(c.notices).toHaveLength(1);
+  });
+
+  it('忙碌期间出现新请求（工具返回）后重新计时，再次拖到 4:30 会再提醒一次', async () => {
+    await watching(c, 10 * S);
+    c.reg.get(SID).status = 'busy';
+    await step(c, 270 * S);
+    expect(c.notices).toHaveLength(1);
+    c.tr.addUser(SID, { timestamp: c.clock.now(), isToolResult: true });
+    await step(c, 1 * S);
+    await step(c, 200 * S);
+    expect(c.notices).toHaveLength(1);
+    await step(c, 80 * S);
+    expect(c.notices).toHaveLength(2);
+  });
+
+  it('会话空闲时不提醒（该发送的会发送）；回到空闲后清除标记', async () => {
+    await watching(c, 10 * S);
+    await step(c, 260 * S);
+    expect(c.notices.filter((n) => n.kind === 'stalled')).toHaveLength(0);
+    expect(c.sender.sent).toHaveLength(1);
+  });
+
+  it('已过期（已失效）、已取消勾选的会话不提醒', async () => {
+    await watching(c, 7 * MIN);
+    c.reg.get(SID).status = 'busy';
+    await step(c, 600 * S);
+    expect(c.notices).toHaveLength(0);
+    c.mon.uncheck(SID);
+    await step(c, 600 * S);
+    expect(c.notices).toHaveLength(0);
+  });
+});
+
 describe('缓存已过期', () => {
   let c: Ctx;
   beforeEach(() => void (c = setup()));

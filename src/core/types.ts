@@ -80,7 +80,7 @@ export interface SendReceipt {
 }
 
 export interface Notice {
-  kind: 'failed' | 'capped';
+  kind: 'failed' | 'capped' | 'stalled';
   sessionId: string;
   title: string;
   body: string;
