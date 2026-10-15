@@ -30,6 +30,7 @@ function notify(n: Notice): void {
   if (!Notification.isSupported()) return;
   const note = new Notification({ title: n.title, body: n.body });
   note.on('click', showWindow);
+  note.on('failed', (_e, err) => log(`notification failed: ${err}`));
   note.show();
 }
 
@@ -75,6 +76,21 @@ function buildMenu(): void {
     Menu.buildFromTemplate([
       { role: 'appMenu' },
       { role: 'editMenu' },
+      {
+        label: '工具',
+        submenu: [
+          {
+            label: '发送测试通知',
+            click: () =>
+              notify({
+                kind: 'failed',
+                sessionId: '',
+                title: 'Keepwarm：测试通知',
+                body: '能看到这条，说明发送失败、达到上限时的通知可以正常弹出。',
+              }),
+          },
+        ],
+      },
       { role: 'windowMenu' },
     ]),
   );
