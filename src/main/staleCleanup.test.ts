@@ -21,7 +21,7 @@ afterEach(() => rmSync(root, { recursive: true, force: true }));
 function entry(pid: number, over: Record<string, unknown> = {}, files = { key: true, sock: true }): void {
   writeFileSync(
     join(sessions, `${pid}.json`),
-    JSON.stringify({ pid, sessionId: `s${pid}`, name: 'Claude Cache Keepalive', entrypoint: 'cli', ...over }),
+    JSON.stringify({ pid, sessionId: `s${pid}`, name: 'Keepwarm', entrypoint: 'cli', ...over }),
   );
   if (files.key) writeFileSync(join(sessions, `${pid}.${HASH}.key`), '{}');
   if (files.sock) writeFileSync(join(socks, `${pid}.sock`), '');
@@ -39,6 +39,12 @@ describe('cleanupStale', () => {
     expect(readdirSync(socks)).toEqual([]);
   });
 
+  it('早期名字（Claude Cache Keepalive）留下的残留同样清理', () => {
+    entry(100, { name: 'Claude Cache Keepalive' });
+    expect(run([])).toHaveLength(3);
+    expect(readdirSync(sessions)).toEqual([]);
+  });
+
   it('进程还活着的不碰（含另一个正在运行的本程序）', () => {
     entry(100);
     expect(run([100])).toEqual([]);
@@ -53,7 +59,7 @@ describe('cleanupStale', () => {
 
   it('其他条目一律不碰：桌面版会话、其他名字的 cli 条目、内容损坏的文件', () => {
     entry(200, { name: 'someone', entrypoint: 'claude-desktop-3p' });
-    entry(201, { name: 'Claude Cache Keepalive', entrypoint: 'claude-desktop-3p' });
+    entry(201, { name: 'Keepwarm', entrypoint: 'claude-desktop-3p' });
     entry(202, { name: 'other-cli', entrypoint: 'cli' });
     entry(203, { pid: 999 }); // 文件名与内容里的 pid 不一致
     writeFileSync(join(sessions, '204.json'), '{broken');

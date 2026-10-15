@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2B3744"/>
+      <stop offset="1" stop-color="#17202A"/>
+    </linearGradient>
+    <linearGradient id="fl" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F4B93A"/>
+      <stop offset="1" stop-color="#E08A12"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="512" cy="610" r="330" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#E9A21B" stop-opacity=".30"/>
+      <stop offset="1" stop-color="#E9A21B" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="sh" x="-10%" y="-10%" width="120%" height="125%">
+      <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#000" flood-opacity=".32"/>
+    </filter>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="190" fill="url(#bg)" filter="url(#sh)"/>
+  <rect x="100" y="100" width="824" height="824" rx="190" fill="url(#glow)"/>
+  <!-- 外焰 -->
+  <path fill="url(#fl)" d="M512 214C548 300 668 372 668 540C668 662 604 746 512 746C420 746 356 662 356 540C356 458 396 410 430 366C438 410 462 438 486 448C474 372 490 290 512 214Z"/>
+  <!-- 内焰 -->
+  <path fill="#F7E6B8" d="M512 470C540 518 590 552 590 618C590 676 556 712 512 712C468 712 434 676 434 618C434 570 474 534 512 470Z"/>
+  <!-- 底部一道余温线 -->
+  <rect x="402" y="788" width="220" height="16" rx="8" fill="#5F86B5" opacity=".9"/>
+</svg>

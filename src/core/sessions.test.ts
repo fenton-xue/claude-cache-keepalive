@@ -44,8 +44,9 @@ describe('isDesktopSession', () => {
     expect(isDesktopSession({ ...(parseRegistryEntry(raw) as object), entrypoint: 'claude-desktop' } as never)).toBe(true);
   });
   it('排除本程序自己的注册项', () => {
-    const own = { ...(parseRegistryEntry(raw) as object), name: 'Claude Cache Keepalive', entrypoint: 'cli' };
+    const own = { ...(parseRegistryEntry(raw) as object), name: 'Keepwarm', entrypoint: 'cli' };
     expect(isDesktopSession(own as never)).toBe(false);
+    expect(isDesktopSession({ ...own, name: 'Claude Cache Keepalive' } as never)).toBe(false);
   });
 });
 

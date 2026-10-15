@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { OWN_NAME } from '../core/sessions';
+import { isOwnName } from '../core/sessions';
 
 export interface CleanupOptions {
   sessionsDir: string;
@@ -10,7 +10,7 @@ export interface CleanupOptions {
 }
 
 /**
- * 清理上次崩溃遗留的本程序注册项：进程已不存在、name 为 Claude Cache Keepalive、entrypoint 为 cli。
+ * 清理上次崩溃遗留的本程序注册项：进程已不存在、name 为 Keepwarm（或早期名字 Claude Cache Keepalive）、entrypoint 为 cli。
  * 删除 <pid>.json、<pid>.<64位十六进制>.key、<socketDir>/<pid>.sock。其他条目一律不碰。
  * 返回被删除的路径。
  */
@@ -34,7 +34,7 @@ export function cleanupStale(opts: CleanupOptions): string[] {
     } catch {
       continue;
     }
-    if (raw.name !== OWN_NAME || raw.entrypoint !== 'cli' || raw.pid !== pid) continue;
+    if (!isOwnName(raw.name) || raw.entrypoint !== 'cli' || raw.pid !== pid) continue;
 
     const targets = [file, join(opts.socketDir, `${pid}.sock`)];
     const keyRe = new RegExp(`^${pid}\\.[0-9a-f]{64}\\.key$`);

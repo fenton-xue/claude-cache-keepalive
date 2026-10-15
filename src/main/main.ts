@@ -116,6 +116,8 @@ if (!app.requestSingleInstanceLock()) {
 
   void app.whenReady().then(async () => {
     buildMenu();
+    // 开发模式（electron .）下 Dock 里默认是 Electron 的图标
+    if (process.platform === 'darwin') app.dock?.setIcon(join(__dirname, 'icon.png'));
 
     // 清理上次崩溃遗留的、进程已不存在的本程序注册项
     const probe = new FsProbe();

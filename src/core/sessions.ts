@@ -1,6 +1,12 @@
 import type { RegistryEntry, SessionStatus, SystemProbe } from './types';
 
-export const OWN_NAME = 'Claude Cache Keepalive';
+export const OWN_NAME = 'Keepwarm';
+/** 早期版本使用过的名字，启动清理残留时仍要认得 */
+export const LEGACY_OWN_NAMES: readonly string[] = ['Claude Cache Keepalive'];
+
+export function isOwnName(name: unknown): boolean {
+  return name === OWN_NAME || (typeof name === 'string' && LEGACY_OWN_NAMES.includes(name));
+}
 const STATUSES: readonly string[] = ['idle', 'busy', 'waiting', 'shell'];
 
 /** 把注册文件的 JSON 整理成 RegistryEntry；缺必需字段返回 null */
@@ -32,7 +38,7 @@ export function parseRegistryEntry(raw: unknown): RegistryEntry | null {
 
 /** 桌面版会话（entrypoint 为 claude-desktop 系列），排除本程序自己的注册项 */
 export function isDesktopSession(e: RegistryEntry): boolean {
-  if (e.name === OWN_NAME && e.entrypoint === 'cli') return false;
+  if (isOwnName(e.name) && e.entrypoint === 'cli') return false;
   return e.entrypoint.startsWith('claude-desktop');
 }
 

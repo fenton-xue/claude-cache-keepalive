@@ -16,6 +16,7 @@ await build({
 });
 
 mkdirSync('dist/renderer', { recursive: true });
+copyFileSync('assets/icon.png', 'dist/main/icon.png');
 if (existsSync('src/renderer/renderer.ts')) {
   await build({
     ...common,
