@@ -1,0 +1,5 @@
++0.0s start status idle
++0.2s SENT
++0.7s STATUS idle -> busy updatedAt-statusUpdatedAt 0
++4.2s STATUS busy -> waiting updatedAt-statusUpdatedAt 0
++40.3s stopped, final status waiting

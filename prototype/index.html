@@ -1,0 +1,729 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Cache Keepalive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --desk:#AEB8C2;
+  --paper:#F2F3EF;
+  --card:#FBFBF8;
+  --ink:#17202A;
+  --ink-2:#55606C;
+  --ink-3:#8A949E;
+  --line:#DDE0DA;
+  --warm:#E9A21B;
+  --warm-soft:#F7E6B8;
+  --cold:#5F86B5;
+  --cold-soft:#D5E1EF;
+  --ok:#2F8F62;
+  --bad:#C03A2B;
+  --bad-soft:#F6DEDA;
+  --display:"Bricolage Grotesque",ui-rounded,-apple-system,"PingFang SC",sans-serif;
+  --body:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  font:13px/1.45 var(--body);
+  color:var(--ink);
+  background:var(--desk);
+  min-height:100vh;
+  padding:32px 24px;
+}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--cold);outline-offset:2px}
+
+.stage{display:flex;gap:24px;align-items:flex-start;justify-content:center;flex-wrap:wrap;max-width:1440px;margin:0 auto}
+
+/* ---------- window ---------- */
+.window{
+  flex:1 1 760px;max-width:1040px;min-width:0;
+  background:var(--paper);
+  border-radius:12px;
+  box-shadow:0 0 0 .5px rgba(0,0,0,.35),0 24px 60px rgba(20,30,40,.35);
+  overflow:hidden;
+  container-type:inline-size;
+}
+.titlebar{
+  height:40px;display:flex;align-items:center;padding:0 14px;
+  background:#E7E8E3;border-bottom:1px solid var(--line);
+  position:relative;
+}
+.lights{display:flex;gap:8px}
+.lights i{width:12px;height:12px;border-radius:50%;display:block}
+.lights i:nth-child(1){background:#FF5F57}
+.lights i:nth-child(2){background:#FEBC2E}
+.lights i:nth-child(3){background:#28C840}
+.wtitle{position:absolute;left:0;right:0;text-align:center;font-weight:600;color:var(--ink-2);pointer-events:none}
+
+/* ---------- settings ---------- */
+.settings{
+  display:grid;grid-template-columns:minmax(0,1fr) 120px;gap:8px 20px;
+  padding:20px 24px 18px;border-bottom:1px solid var(--line);
+}
+.settings .err{grid-column:1 / 3;margin:0}
+.field label{display:block;font-weight:600;margin-bottom:6px}
+.field .row{display:flex;align-items:center;gap:10px}
+.field input[type=text]{
+  height:34px;padding:0 10px;border:1px solid #C9CDC6;border-radius:7px;background:var(--card);
+  min-width:0;
+}
+#content{width:100%}
+#interval{width:100%;font-family:var(--display);font-weight:500;font-size:17px;letter-spacing:.02em;font-variant-numeric:tabular-nums;text-align:center}
+.field input[aria-invalid=true]{border-color:var(--bad);background:var(--bad-soft)}
+.err{color:var(--bad);font-size:12px}
+.err:empty{display:none}
+
+/* ---------- list ---------- */
+.listhead{display:flex;align-items:center;gap:8px;padding:16px 24px 8px}
+.listhead h2{margin:0;font:700 17px/1.2 var(--display);letter-spacing:-.01em}
+.listhead .sp{flex:1}
+.btn{
+  height:30px;padding:0 12px;border-radius:7px;border:1px solid #C3C8C0;background:var(--card);cursor:pointer;
+  display:inline-flex;align-items:center;gap:6px;
+}
+.btn:hover{background:#fff}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+.btn.primary:hover{background:#26323F}
+.btn svg{width:14px;height:14px}
+.btn.icon{width:30px;padding:0;justify-content:center}
+.btn.spin svg{animation:spin .7s linear}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.cols,.row-s{
+  display:grid;
+  grid-template-columns:26px minmax(160px,1.05fr) minmax(230px,1.6fr) 120px minmax(170px,1.2fr);
+  column-gap:18px;align-items:center;padding:0 24px;
+}
+.cols{color:var(--ink-3);font-size:12px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.rows,.grows{list-style:none;margin:0;padding:0}
+
+/* 目录分组 */
+.ghead{
+  display:flex;align-items:center;gap:8px;padding:9px 24px 9px 14px;
+  background:#E9EAE5;border-bottom:1px solid var(--line);border-top:1px solid var(--line);
+  cursor:pointer;user-select:none;
+}
+.grp:first-child .ghead{border-top:0}
+.chev{width:22px;height:22px;border:0;background:none;display:grid;place-items:center;border-radius:5px;color:var(--ink-2);cursor:pointer;padding:0}
+.chev svg{width:12px;height:12px;transition:transform .15s}
+.grp[data-collapsed=true] .chev svg{transform:rotate(-90deg)}
+.gico{width:16px;height:16px;color:var(--ink-2);flex:none}
+.gname{font:700 14px/1.2 var(--display);letter-spacing:-.005em;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gsum{margin-left:6px;display:flex;gap:12px;color:var(--ink-3);font-size:12px;white-space:nowrap}
+.gsum .mon{color:#8F6200;font-weight:600}
+.gsum .bad{color:var(--bad);font-weight:600}
+.gact{margin-left:auto;display:flex;gap:2px;opacity:0;transition:opacity .12s}
+.ghead:hover .gact,.ghead:focus-within .gact{opacity:1}
+.iconbtn{width:26px;height:26px;border:0;border-radius:6px;background:none;display:grid;place-items:center;cursor:pointer;color:var(--ink-2);padding:0}
+.iconbtn:hover:not(:disabled){background:rgba(23,32,42,.1);color:var(--ink)}
+.iconbtn:disabled{opacity:.3;cursor:not-allowed}
+.iconbtn svg{width:14px;height:14px}
+.grp[data-collapsed=true] .grows{display:none}
+.gempty{padding:14px 24px 14px 52px;color:var(--ink-3);border-bottom:1px solid var(--line)}
+.grp .row-s{padding-left:38px}
+
+.pop{
+  position:absolute;right:24px;top:100%;width:380px;z-index:5;
+  background:var(--card);border:1px solid #C9CDC6;border-radius:10px;padding:6px;
+  box-shadow:0 12px 32px rgba(20,30,40,.22);
+}
+.pop .pitem{display:block;width:100%;text-align:left;border:0;background:none;border-radius:7px;padding:7px 10px;cursor:pointer}
+.pop .pitem:hover{background:#ECEDE8}
+.pop .pitem b{display:block;font-weight:600}
+.pop .pitem span{display:block;color:var(--ink-2);font-size:12px}
+.pop .pnone{padding:10px;color:var(--ink-3)}
+.listhead{position:relative}
+.row-s{
+  padding-top:14px;padding-bottom:14px;border-bottom:1px solid var(--line);
+  position:relative;background:transparent;transition:background .2s;
+}
+.row-s::before{ /* 状态边：监控中的行左侧有一条色边 */
+  content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:transparent;
+}
+.row-s[data-mode=watch]::before,.row-s[data-mode=sending]::before{background:var(--warm)}
+.row-s[data-mode=expired]::before{background:var(--cold)}
+.row-s[data-mode=failed]::before{background:var(--bad)}
+.row-s[data-mode=capped]::before{background:var(--ok)}
+.row-s[data-mode=watch],.row-s[data-mode=sending],.row-s[data-mode=expired],.row-s[data-mode=failed],.row-s[data-mode=capped]{background:var(--card)}
+.row-s[data-mode=gone]{opacity:.55}
+
+.chk input{width:18px;height:18px;margin:0;accent-color:var(--ink);cursor:pointer}
+.chk input:disabled{cursor:not-allowed}
+
+.who{min-width:0}
+.name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dir{color:var(--ink-2);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meta{display:flex;align-items:center;gap:6px;color:var(--ink-3);font-size:12px;margin-top:2px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--ink-3);flex:none}
+.dot[data-s=idle]{background:var(--ok)}
+.dot[data-s=busy]{background:var(--warm);animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
+
+/* 缓存余温条 */
+.life{min-width:0}
+.track{position:relative;height:12px;border-radius:6px;background:#E4E6E0;overflow:hidden}
+.zone{
+  position:absolute;top:0;bottom:0;right:0;
+  background:repeating-linear-gradient(135deg,transparent 0 4px,rgba(23,32,42,.12) 4px 5px);
+}
+.fill{position:absolute;left:0;top:0;bottom:0;background:var(--warm);border-radius:6px 0 0 6px;transition:width .2s linear,background .4s}
+.fill[data-cold=true]{background:var(--cold)}
+.row-s[data-mode=off] .fill:not([data-cold=true]){background:#D4B26A}
+.tick{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink);border-radius:1px}
+.scale{position:relative;height:16px;margin-top:3px;font-size:11px;color:var(--ink-3)}
+.scale span{position:absolute;top:0;white-space:nowrap}
+.scale .s0{left:0}
+.scale .s5{right:0}
+.scale .st{transform:translateX(-100%);padding-right:5px;color:var(--ink-2)}
+.since{font-size:12px;color:var(--ink-2)}
+
+/* 倒计时 */
+.count-cell{text-align:left}
+.big{font:500 26px/1.1 var(--display);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.big.text{font-size:15px;font-weight:700}
+.big.dim{color:var(--ink-3)}
+.big.cold{color:var(--cold)}
+.big.bad{color:var(--bad)}
+.big.good{color:var(--ok)}
+.cap{font-size:12px;color:var(--ink-2);margin-top:2px}
+.cap{white-space:pre-line}
+.bars{height:3px;margin-top:6px;border-radius:2px;background:#D9DCD5;overflow:hidden}
+.bars i{display:block;height:100%;background:var(--ink);transition:width .3s}
+
+/* 结果 */
+.result{min-width:0;font-size:12px}
+.res-ok{color:var(--ok);font-weight:600}
+.res-bad{color:var(--bad);font-weight:600}
+.res-text{color:var(--ink-2);margin-top:2px}
+.res-none{color:var(--ink-3)}
+.result .btn{margin-top:6px}
+
+.empty{padding:56px 24px;text-align:center;color:var(--ink-2)}
+.empty b{display:block;font:700 17px/1.3 var(--display);color:var(--ink);margin-bottom:6px}
+
+
+/* 窄窗口：折叠为两行 */
+@container (max-width:860px){
+  .cols{display:none}
+  .row-s{grid-template-columns:26px minmax(0,1fr) 110px;row-gap:10px}
+  .row-s .life{grid-column:2 / 4;grid-row:2}
+  .row-s .result{grid-column:2 / 4;grid-row:3}
+}
+
+/* ---------- 演示面板 ---------- */
+.demo{
+  flex:0 0 290px;background:#1F2730;color:#DCE3EA;border-radius:12px;padding:16px;
+  box-shadow:0 12px 30px rgba(20,30,40,.3);
+}
+.demo h3{margin:0 0 2px;font:700 15px var(--display)}
+.demo p{margin:0 0 14px;color:#93A0AD;font-size:12px}
+.demo section{padding:12px 0;border-top:1px solid #323D49}
+.demo label{display:block;font-size:12px;color:#93A0AD;margin-bottom:6px}
+.demo select{width:100%;height:30px;background:#2A3541;border:1px solid #3B4856;border-radius:6px;padding:0 6px}
+.demo .grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
+.demo .btn{background:#2A3541;border-color:#3B4856;color:#DCE3EA;justify-content:center;height:30px;padding:0 6px;font-size:12px}
+.demo .btn:hover{background:#34414F}
+.demo .btn[aria-pressed=true]{background:#E9A21B;border-color:#E9A21B;color:#1F2730;font-weight:600}
+.demo .wide{grid-column:1 / 3}
+.demo .note{font-size:11px;color:#7C8997;margin-top:8px}
+
+/* ---------- 通知 ---------- */
+.notice{
+  position:fixed;top:16px;right:16px;width:340px;z-index:10;
+  display:flex;gap:10px;padding:12px 14px;border-radius:14px;
+  background:rgba(250,250,247,.92);backdrop-filter:blur(18px);
+  box-shadow:0 8px 30px rgba(0,0,0,.28),0 0 0 .5px rgba(0,0,0,.2);
+  transform:translateX(380px);transition:transform .3s cubic-bezier(.2,.8,.2,1);
+}
+.notice.show{transform:none}
+.notice .ic{width:34px;height:34px;border-radius:8px;background:var(--ink);color:var(--warm);display:grid;place-items:center;font:700 16px var(--display);flex:none}
+.notice b{display:block;font-weight:600}
+.notice span{color:var(--ink-2);font-size:12.5px;display:block}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+}
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <main class="window" aria-label="Claude Cache Keepalive">
+    <div class="titlebar">
+      <div class="lights" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div class="wtitle">Claude Cache Keepalive</div>
+    </div>
+
+    <form class="settings" id="settings" onsubmit="return false">
+      <div class="field">
+        <label for="content">发送内容</label>
+        <input type="text" id="content" value="1" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="interval">空闲间隔</label>
+        <input type="text" id="interval" value="4:30" inputmode="numeric" autocomplete="off">
+      </div>
+      <div class="err" id="interr" role="alert"></div>
+    </form>
+
+    <div class="listhead">
+      <h2>会话</h2>
+      <span class="sp"></span>
+      <button class="btn icon" id="add-dir" type="button" title="添加目录" aria-label="添加目录" aria-haspopup="true" aria-expanded="false">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>
+      </button>
+      <div class="pop" id="pop" hidden>
+        <div id="pop-items"></div>
+      </div>
+      <button class="btn icon" id="refresh" type="button" title="刷新" aria-label="刷新">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8a5.5 5.5 0 1 1-1.7-4"/><path d="M13 2v3h-3"/></svg>
+      </button>
+    </div>
+
+    <div class="cols" aria-hidden="true">
+      <span></span><span>会话</span><span>缓存余温</span><span>倒计时</span><span>最近一次发送</span>
+    </div>
+    <ul class="rows" id="rows"></ul>
+    <div class="empty" id="empty" hidden>
+      <b>还没有添加目录</b>
+      <div style="margin-bottom:14px">添加项目目录后，其中正在运行的会话会出现在这里。</div>
+      <button class="btn primary" id="add-dir-empty" type="button">添加目录</button>
+    </div>
+
+  </main>
+
+  <aside class="demo" aria-label="原型演示控制">
+    <h3>原型演示控制</h3>
+    <p>仅用于原型，不属于产品界面。</p>
+
+    <section>
+      <label>时间流速</label>
+      <div class="grid" style="grid-template-columns:repeat(3,1fr);margin-top:0" id="speeds">
+        <button class="btn" data-speed="1" aria-pressed="true">1×</button>
+        <button class="btn" data-speed="10" aria-pressed="false">10×</button>
+        <button class="btn" data-speed="60" aria-pressed="false">60×</button>
+      </div>
+    </section>
+
+    <section>
+      <label for="pick">选中会话</label>
+      <select id="pick"></select>
+      <div class="grid">
+        <button class="btn" id="d-req">出现新请求</button>
+        <button class="btn" id="d-busy">切换忙 / 空闲</button>
+        <button class="btn" id="d-exit">会话退出</button>
+        <button class="btn" id="d-cold">让缓存变冷</button>
+      </div>
+      <label for="failkind" style="margin-top:10px">让下一次发送失败为</label>
+      <select id="failkind">
+        <option value="">正常成功</option>
+        <option value="held">held 被挂起</option>
+        <option value="denied">denied 被拒绝</option>
+        <option value="dropped">dropped 被丢弃</option>
+        <option value="timeout">超时无回执</option>
+      </select>
+      <div class="note">「周报整理」默认每次都会被挂起（held），模拟目标会话不是 bypass 模式。</div>
+    </section>
+
+    <section>
+      <div class="grid" style="margin-top:0">
+        <button class="btn" id="d-empty">清空目录</button>
+        <button class="btn" id="d-reset">重置全部</button>
+      </div>
+    </section>
+  </aside>
+</div>
+
+<div class="notice" id="notice" role="status" aria-live="polite">
+  <div class="ic">缓</div>
+  <div><b id="n-title"></b><span id="n-body"></span></div>
+</div>
+
+<script>
+/* ============ 状态 ============ */
+const TTL = 300;                 // 缓存有效期（秒），固定
+const SEND_TIMEOUT = 30;
+const MIN_I = 60, MAX_I = 290;
+const $ = (s, r = document) => r.querySelector(s);
+
+const S = {
+  speed: 1,
+  vnow: Date.now() / 1000,       // 虚拟时间（秒）
+  interval: 270,
+  content: '1',
+  sessions: [],
+  dirs: [],                      // 已添加目录：{ path, collapsed, ids }，数组顺序即显示顺序
+};
+const W = '/Users/fenton/Documents/Workspace';
+const SEED_DIRS = [`/Users/fenton/Documents/Claude`, `${W}/TypescriptCode/claude-cache-keepalive`, `${W}/TypescriptCode/ones-page`, `${W}/FentonWorkspace`];
+const CANDIDATES = [`${W}/emm`, `/Users/fenton/Documents/Codex/claude-cache-keepalive`];   // 模拟系统选择文件夹里能选到的目录
+
+const home = p => p.replace('/Users/fenton', '~');
+const mmss = s => { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+const hms = t => new Date(t * 1000).toTimeString().slice(0, 8);
+const human = s => {
+  s = Math.floor(s);
+  if (s < 60) return s + ' 秒';
+  const m = Math.floor(s / 60), r = s % 60;
+  return r ? `${m} 分 ${r} 秒` : `${m} 分钟`;
+};
+const cap = () => Math.floor(7200 / S.interval);
+
+function seed() {
+  const n = S.vnow;
+  S.sessions = [
+    { id: '0cfe2f58-0946-4519-80af-73812835f195', name: '打招呼', cwd: '/Users/fenton/Documents/Claude', status: 'idle', lastReq: n - 70 },
+    { id: '6e8d4425-1853-4e73-a4da-6cf45a68a024', name: 'Claude 缓存保活需求文档', cwd: `${W}/TypescriptCode/claude-cache-keepalive`, status: 'busy', lastReq: n - 5, busyUntil: n + 45 },
+    { id: '8a3c10de-6b42-4f17-93ad-5e0b7c21f9a6', name: '缓存保活原型调整', cwd: `${W}/TypescriptCode/claude-cache-keepalive/.claude/worktrees/ui-polish`, status: 'idle', lastReq: n - 100 },
+    { id: '3b91a7c0-5d1e-4f82-9c14-aa27de6310f4', name: 'ones-page 重构', cwd: `${W}/TypescriptCode/ones-page`, status: 'idle', lastReq: n - 7 * 60 },
+    { id: 'f2e6a904-1c7d-4b58-8d3e-90a4c6b17e25', name: 'ones-page 评审', cwd: `${W}/TypescriptCode/ones-page`, status: 'exited', lastReq: n - 40 * 60 },
+    { id: '91d2e6b4-77a0-4c35-8e0f-12c4b6a9d7e1', name: '周报整理', cwd: `${W}/FentonWorkspace`, status: 'idle', lastReq: n - 150, failKind: 'held', failSticky: true },
+    { id: 'c07f58aa-2e91-4d6b-b3a8-4f90e1d25c77', name: 'emm 调试', cwd: `${W}/emm`, status: 'idle', lastReq: n - 200 },
+  ].map(s => Object.assign({ mon: false, mode: 'off', streak: 0, result: null, gone: null }, s));
+}
+
+/* ============ 目录 ============ */
+const base = p => p.split('/').filter(Boolean).pop();
+const parent = p => base(p.split('/').slice(0, -1).join('/'));
+function dirLabel(d) {                         // 只显示最后一级；同名时追加上一级目录名
+  const dup = S.dirs.filter(x => base(x.path) === base(d.path)).length > 1;
+  return dup ? `${base(d.path)}（${parent(d.path)}）` : base(d.path);
+}
+function owner(s) {                            // 目录本身及子目录都算；嵌套时取最深的目录
+  let best = null;
+  for (const d of S.dirs) if (s.cwd === d.path || s.cwd.startsWith(d.path + '/')) if (!best || d.path.length > best.path.length) best = d;
+  return best;
+}
+function save() { localStorage.setItem('keepalive-proto', JSON.stringify({ dirs: S.dirs.map(d => ({ path: d.path, collapsed: d.collapsed })), interval: S.interval, content: S.content })); }
+function load() {
+  try {
+    const v = JSON.parse(localStorage.getItem('keepalive-proto'));
+    if (!v) return false;
+    S.dirs = v.dirs.map(d => ({ ...d, ids: null })); S.interval = v.interval; S.content = v.content;
+    $('#interval').value = mmss(S.interval); $('#content').value = S.content;
+    return true;
+  } catch { return false; }
+}
+function addDir(path) {
+  if (S.dirs.some(d => d.path === path)) return;
+  S.dirs.push({ path, collapsed: false, ids: null }); save(); render(true);
+}
+function removeDir(d) {                        // 移除目录：其下会话立即停止监控
+  S.sessions.filter(s => owner(s) === d).forEach(s => { s.mon = false; s.mode = 'off'; s.streak = 0; if (s.result && !s.result.ok) s.result = null; });
+  S.dirs = S.dirs.filter(x => x !== d); save(); render();
+}
+function moveDir(d, delta) {
+  const i = S.dirs.indexOf(d), j = i + delta;
+  if (j < 0 || j >= S.dirs.length) return;
+  [S.dirs[i], S.dirs[j]] = [S.dirs[j], S.dirs[i]]; save(); render();
+}
+
+/* ============ 行 DOM（只创建一次，之后局部更新） ============ */
+const rowsEl = $('#rows');
+
+function buildRow(s) {
+  const li = document.createElement('li');
+  li.className = 'row-s';
+  li.innerHTML = `
+    <label class="chk"><input type="checkbox" aria-label="监控此会话"></label>
+    <div class="who">
+      <div class="name"></div>
+      <div class="dir"></div>
+      <div class="meta"><i class="dot"></i><span class="st"></span><span class="sid"></span></div>
+    </div>
+    <div class="life">
+      <div class="track"><div class="fill"></div><div class="zone"></div><i class="tick"></i></div>
+      <div class="scale"><span class="s0">0:00</span><span class="st">发送点</span></div>
+      <div class="since"></div>
+    </div>
+    <div class="count-cell"><div class="big"></div><div class="cap"></div><div class="bars" hidden><i></i></div></div>
+    <div class="result"></div>`;
+  s.el = li;
+  $('.name', li).textContent = s.name;
+  $('.name', li).title = s.name;
+  $('.dir', li).title = s.cwd;
+  $('.sid', li).textContent = '  ' + s.id.slice(0, 8);
+  $('.sid', li).title = s.id;
+  $('input', li).addEventListener('change', e => toggle(s, e.target.checked));
+  $('.result', li).addEventListener('click', e => {
+    if (e.target.closest('[data-confirm]')) confirmSend(s);
+  });
+  return li;
+}
+
+const FAIL = {
+  held:    ['已挂起', 'held', '目标会话不是 bypass 模式，消息在等待用户批准。'],
+  denied:  ['已拒绝', 'denied', '用户在目标会话里拒绝了这条消息。'],
+  dropped: ['已丢弃', 'dropped', '被目标会话丢弃，原因 rate-limited：发送过于频繁。'],
+  timeout: ['超时未送达', 'timeout', `${SEND_TIMEOUT} 秒内没有回执，会话记录里也没有出现这条消息。`],
+};
+
+function update(s) {
+  const li = s.el, el = S.vnow - s.lastReq, gone = s.status === 'exited';
+  const mode = gone ? 'gone' : s.mode;
+  li.dataset.mode = mode;
+
+  const cb = $('input', li);
+  cb.checked = s.mon; cb.disabled = gone;
+
+  const dot = $('.dot', li);
+  dot.dataset.s = s.status;
+  $('.meta .st', li).textContent = gone ? '不可用' : s.status === 'busy' ? '对话进行中' : '空闲';
+
+  /* 余温条 */
+  const pct = Math.min(el, TTL) / TTL * 100;
+  const fill = $('.fill', li);
+  fill.style.width = pct + '%';
+  fill.dataset.cold = el > TTL;
+  const tp = S.interval / TTL * 100;
+  $('.tick', li).style.left = `calc(${tp}% - 1px)`;
+  $('.zone', li).style.left = tp + '%';
+  const st = $('.scale .st', li);
+  st.style.left = tp + '%';
+  st.textContent = '发送点 ' + mmss(S.interval);
+  $('.since', li).textContent = s.status === 'busy' ? '对话进行中'
+    : gone ? '会话已退出'
+    : el > TTL ? `缓存已失效 ${human(el - TTL)}`
+    : `最后请求 ${human(el)} 前`;
+
+  /* 倒计时 */
+  const big = $('.big', li), capEl = $('.cap', li), bars = $('.bars', li);
+  big.className = 'big'; bars.hidden = true;
+  const streak = lead => {
+    capEl.textContent = (lead ? lead + '\n' : '') + `已连续 ${s.streak} / ${cap()}`;
+    bars.hidden = false;
+    $('i', bars).style.width = (s.streak / cap() * 100) + '%';
+  };
+  if (gone) { big.textContent = '—'; big.classList.add('dim'); capEl.textContent = ''; }
+  else if (mode === 'off') { big.textContent = '—'; big.classList.add('dim'); capEl.textContent = '未监控'; }
+  else if (mode === 'watch' && s.status === 'busy') { big.textContent = '等待空闲'; big.classList.add('text'); streak('空闲后再判断'); }
+  else if (mode === 'watch') { big.textContent = mmss(S.interval - el); streak('后发送'); }
+  else if (mode === 'sending') { big.textContent = '发送中'; big.classList.add('text'); streak(''); }
+  else if (mode === 'expired') { big.textContent = '已失效'; big.classList.add('text', 'cold'); capEl.textContent = '等待你确认'; }
+  else if (mode === 'failed') { big.textContent = '已停止'; big.classList.add('text', 'bad'); capEl.textContent = '取消勾选再勾选可恢复'; }
+  else if (mode === 'capped') { big.textContent = '已完成'; big.classList.add('text', 'good'); streak(''); }
+
+  /* 最近一次发送 */
+  const r = s.result;
+  let html;
+  if (gone && s.gone) html = `<div class="res-bad">会话已退出</div><div class="res-text">${s.gone}</div>`;
+  else if (mode === 'expired') html = `<div class="res-text">缓存已超过 5 分钟，现在发送会按未命中缓存计费。</div><button class="btn primary" data-confirm type="button">确认并发送</button>`;
+  else if (mode === 'sending') html = `<div class="res-text">正在发送「${esc(S.content)}」…</div>`;
+  else if (!r) html = `<div class="res-none">尚未发送</div>`;
+  else if (r.ok) html = `<div class="res-ok">${hms(r.at)} 已送达</div>`;
+  else { const f = FAIL[r.kind]; html = `<div class="res-bad">${f[0]}（${f[1]}）</div><div class="res-text">${f[2]}</div>`; }
+  if (s._html !== html) { $('.result', li).innerHTML = html; s._html = html; }
+}
+const esc = t => t.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+
+/* ============ 行为 ============ */
+function toggle(s, on) {
+  if (s.status === 'exited') return;
+  s.mon = on; s.streak = 0;
+  if (!on) { s.mode = 'off'; if (s.result && !s.result.ok) s.result = null; return render(); }
+  s.result = s.result && s.result.ok ? s.result : null;
+  s.mode = (S.vnow - s.lastReq) > TTL ? 'expired' : 'watch';
+  render();
+}
+
+function confirmSend(s) { send(s); }
+
+function send(s) {
+  s.mode = 'sending';
+  update(s);
+  setTimeout(() => {
+    if (s.status === 'exited' || s.mode !== 'sending') return;
+    const kind = s.failKind;
+    if (!s.failSticky) s.failKind = null;
+    if (kind) {
+      s.result = { ok: false, kind };
+      s.mode = 'failed';
+      notify('缓存保活：发送失败', `「${s.name}」${FAIL[kind][0]}（${FAIL[kind][1]}）：${FAIL[kind][2]}`);
+    } else {
+      s.streak++;
+      s.lastReq = S.vnow;                       // 自动发送及其回复不打断连续次数
+      s.result = { ok: true, at: S.vnow };
+      s.mode = 'watch';
+      if (s.streak >= cap()) {
+        s.mode = 'capped';
+        notify('缓存保活：已达连续上限', `「${s.name}」已连续发送 ${s.streak} 次，已停止保活。`);
+      }
+    }
+    render();
+  }, 1400);
+}
+
+function tick(dt) {
+  S.vnow += dt * S.speed;
+  for (const s of S.sessions) {
+    if (s.status === 'busy' && s.busyUntil && S.vnow >= s.busyUntil) { s.status = 'idle'; s.busyUntil = null; humanRequest(s); }
+    if (s.mode === 'watch' && s.status !== 'exited') {
+      if (s.streak >= cap()) { s.mode = 'capped'; continue; }
+      const el = S.vnow - s.lastReq;
+      if (s.status === 'busy') continue;
+      if (el >= S.interval) { if (el > TTL) s.mode = 'expired'; else send(s); }
+    }
+    if (s.el) update(s);
+  }
+  S.dirs.forEach(updateGroup);
+}
+
+function humanRequest(s) {            // 其他新请求：重新计时，连续次数归零
+  s.lastReq = S.vnow; s.streak = 0;
+  if (s.mode === 'expired') s.mode = 'watch';
+}
+
+/* ============ 通知 ============ */
+let nt;
+function notify(title, body) {
+  $('#n-title').textContent = title; $('#n-body').textContent = body;
+  $('#notice').classList.add('show');
+  clearTimeout(nt); nt = setTimeout(() => $('#notice').classList.remove('show'), 7000);
+}
+
+/* ============ 渲染 ============ */
+const ICON = {
+  chev: '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5 6 8l3.5-3.5"/></svg>',
+  folder: '<svg class="gico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M1.8 4.2c0-.7.5-1.2 1.2-1.2h3l1.4 1.6H13c.7 0 1.2.5 1.2 1.2v6c0 .7-.5 1.2-1.2 1.2H3c-.7 0-1.2-.5-1.2-1.2z"/></svg>',
+  up: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 11V3M3.5 6.5 7 3l3.5 3.5"/></svg>',
+  down: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3v8M3.5 7.5 7 11l3.5-3.5"/></svg>',
+  x: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3.5 3.5l7 7M10.5 3.5l-7 7"/></svg>',
+};
+
+function buildGroup(d, i, resort) {
+  const members = S.sessions.filter(s => owner(s) === d);
+  if (!d.ids || resort) d.ids = members.sort((a, b) => b.lastReq - a.lastReq).map(s => s.id);   // 只在刷新时重排，避免点击时行跳动
+  d.ids = [...d.ids.filter(id => members.some(s => s.id === id)), ...members.filter(s => !d.ids.includes(s.id)).map(s => s.id)];
+  const li = document.createElement('li');
+  li.className = 'grp';
+  li.dataset.collapsed = d.collapsed;
+  const label = dirLabel(d);
+  li.innerHTML = `
+    <div class="ghead" title="${esc(d.path)}">
+      <button class="chev" type="button" aria-expanded="${!d.collapsed}" aria-label="${d.collapsed ? '展开' : '折叠'} ${esc(label)}">${ICON.chev}</button>
+      ${ICON.folder}
+      <span class="gname">${esc(label)}</span>
+      <span class="gsum"></span>
+      <span class="gact">
+        <button class="iconbtn" data-act="up" type="button" title="上移" aria-label="上移 ${esc(label)}" ${i === 0 ? 'disabled' : ''}>${ICON.up}</button>
+        <button class="iconbtn" data-act="down" type="button" title="下移" aria-label="下移 ${esc(label)}" ${i === S.dirs.length - 1 ? 'disabled' : ''}>${ICON.down}</button>
+        <button class="iconbtn" data-act="rm" type="button" title="移除目录，停止其下所有会话的监控" aria-label="移除 ${esc(label)}">${ICON.x}</button>
+      </span>
+    </div>
+    <ul class="grows"></ul>`;
+  const ul = $('.grows', li);
+  const rows = d.ids.map(id => S.sessions.find(s => s.id === id)).map(s => {
+    const row = s.el || buildRow(s);
+    const sub = s.cwd === d.path ? '' : s.cwd.slice(d.path.length + 1);
+    const dirEl = $('.dir', row);
+    dirEl.textContent = sub; dirEl.hidden = !sub;
+    return row;
+  });
+  if (rows.length) ul.append(...rows);
+  else ul.innerHTML = '<li class="gempty">没有正在运行的会话</li>';
+  $('.ghead', li).addEventListener('click', e => {
+    const act = e.target.closest('[data-act]');
+    if (act) { ({ up: () => moveDir(d, -1), down: () => moveDir(d, 1), rm: () => removeDir(d) })[act.dataset.act](); return; }
+    d.collapsed = !d.collapsed; save(); li.dataset.collapsed = d.collapsed;
+    const c = $('.chev', li); c.setAttribute('aria-expanded', !d.collapsed); c.setAttribute('aria-label', `${d.collapsed ? '展开' : '折叠'} ${label}`);
+  });
+  d.el = li;
+  return li;
+}
+
+function updateGroup(d) {
+  if (!d.el) return;
+  const m = S.sessions.filter(s => owner(s) === d);
+  const mon = m.filter(s => s.mon && ['watch', 'sending'].includes(s.mode)).length;
+  const bad = m.filter(s => s.mode === 'failed').length;
+  const cold = m.filter(s => s.mode === 'expired').length;
+  const html = (mon ? `<span class="mon">监控中 ${mon}</span>` : '') + (cold ? `<span style="color:var(--cold);font-weight:600">已失效 ${cold}</span>` : '') + (bad ? `<span class="bad">失败 ${bad}</span>` : '');
+  const g = $('.gsum', d.el);
+  if (d._sum !== html) { g.innerHTML = html; d._sum = html; }
+}
+
+function render(resort = false) {
+  const none = S.dirs.length === 0;
+  rowsEl.replaceChildren(...S.dirs.map((d, i) => buildGroup(d, i, resort)));
+  $('#empty').hidden = !none;
+  $('.cols').style.display = none ? 'none' : '';
+  const vis = S.sessions.filter(owner);
+  const pick = $('#pick'), cur = pick.value;
+  pick.innerHTML = vis.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
+  if (cur && vis.some(s => s.id === cur)) pick.value = cur;
+  vis.forEach(update);
+  S.dirs.forEach(d => { d._sum = null; updateGroup(d); });
+}
+const picked = () => S.sessions.find(s => s.id === $('#pick').value);
+
+/* 添加目录（原型用列表代替系统对话框） */
+const pop = $('#pop'), addBtn = $('#add-dir');
+function openPop(open) {
+  pop.hidden = !open; addBtn.setAttribute('aria-expanded', open);
+  if (!open) return;
+  const items = [...SEED_DIRS, ...CANDIDATES].filter(p => !S.dirs.some(d => d.path === p));
+  $('#pop-items').innerHTML = items.length
+    ? items.map(p => `<button class="pitem" type="button" data-path="${esc(p)}"><b>${esc(base(p))}</b><span>${esc(home(p))}</span></button>`).join('')
+    : '<div class="pnone">没有更多可添加的目录</div>';
+}
+addBtn.onclick = e => { e.stopPropagation(); openPop(pop.hidden); };
+$('#add-dir-empty').onclick = e => { e.stopPropagation(); openPop(true); };
+pop.addEventListener('click', e => { const b = e.target.closest('[data-path]'); if (b) { addDir(b.dataset.path); openPop(false); } });
+document.addEventListener('click', e => { if (!pop.hidden && !pop.contains(e.target)) openPop(false); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') openPop(false); });
+
+/* ============ 设置 ============ */
+$('#content').addEventListener('input', e => { S.content = e.target.value.trim() || S.content; e.target.setAttribute('aria-invalid', !e.target.value.trim()); });
+$('#interval').addEventListener('input', e => {
+  const m = e.target.value.trim().match(/^(\d{1,2}):(\d{2})$/) || e.target.value.trim().match(/^(\d{1,3})$/);
+  let sec = null;
+  if (m) sec = m.length === 3 ? (+m[1]) * 60 + (+m[2]) : +m[1];
+  const bad = sec === null || sec < MIN_I || sec > MAX_I;
+  e.target.setAttribute('aria-invalid', bad);
+  $('#interr').textContent = bad ? `间隔需在 ${mmss(MIN_I)} 到 ${mmss(MAX_I)} 之间，格式如 4:30。` : '';
+  if (!bad) { S.interval = sec; save(); render(); }
+});
+
+/* ============ 演示控制 ============ */
+$('#speeds').addEventListener('click', e => {
+  const b = e.target.closest('[data-speed]'); if (!b) return;
+  S.speed = +b.dataset.speed;
+  $('#speeds').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+});
+$('#d-req').onclick = () => { const s = picked(); if (s && s.status !== 'exited') { humanRequest(s); render(); } };
+$('#d-busy').onclick = () => {
+  const s = picked(); if (!s || s.status === 'exited') return;
+  if (s.status === 'busy') { s.status = 'idle'; s.busyUntil = null; humanRequest(s); } else s.status = 'busy';
+  render();
+};
+$('#d-exit').onclick = () => {
+  const s = picked(); if (!s || s.status === 'exited') return;
+  if (s.mon) s.gone = '勾选已自动取消';
+  s.status = 'exited'; s.mon = false; s.mode = 'off'; s.streak = 0; render();
+};
+$('#d-cold').onclick = () => { const s = picked(); if (s && s.status !== 'exited') { s.lastReq = S.vnow - TTL - 20; if (s.mode === 'watch') s.mode = 'expired'; render(); } };
+$('#failkind').onchange = e => { const s = picked(); if (s) { s.failKind = e.target.value || null; s.failSticky = false; } };
+$('#pick').onchange = () => { const s = picked(); $('#failkind').value = s && s.failKind || ''; };
+$('#d-empty').onclick = () => { S.sessions.forEach(x => { x.mon = false; x.mode = 'off'; x.streak = 0; }); S.dirs = []; save(); render(); };
+$('#d-reset').onclick = () => { localStorage.removeItem('keepalive-proto'); location.reload(); };
+$('#refresh').onclick = e => {
+  const b = e.currentTarget; b.classList.remove('spin'); void b.offsetWidth; b.classList.add('spin');
+  render(true);
+};
+
+/* ============ 启动 ============ */
+seed();
+if (!load()) S.dirs = SEED_DIRS.map(path => ({ path, collapsed: false, ids: null }));
+render(true);
+let last = performance.now();
+setInterval(() => { const n = performance.now(); tick((n - last) / 1000); last = n; }, 200);
+</script>
+</body>
+</html>
