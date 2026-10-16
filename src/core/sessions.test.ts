@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bestBySessionId, displayName, findBySessionId, isAvailable, isDesktopSession, parseRegistryEntry } from './sessions';
+import { bestByHost, bestBySessionId, displayName, findBySessionId, isAvailable, isDesktopSession, parseRegistryEntry, shortHostId } from './sessions';
 import { FakeRegistry } from './testing/fakes';
 
 const raw = {
@@ -12,6 +12,7 @@ const raw = {
   statusUpdatedAt: 5,
   updatedAt: 6,
   name: 'n',
+  hostSessionId: 'local_054fbaf1-430e-492d-8a02-141d04286b43',
   extra: 1,
 };
 
@@ -27,6 +28,7 @@ describe('parseRegistryEntry', () => {
       statusUpdatedAt: 5,
       updatedAt: 6,
       name: 'n',
+      hostSessionId: 'local_054fbaf1-430e-492d-8a02-141d04286b43',
     });
   });
   it('缺必需字段返回 null，未知 status 丢弃', () => {
@@ -38,6 +40,13 @@ describe('parseRegistryEntry', () => {
 });
 
 describe('isDesktopSession', () => {
+  it('没有 hostSessionId 的不算桌面版会话，会话号去掉 local_ 前缀取前 8 位', () => {
+    const { hostSessionId: _h, ...rest } = raw;
+    expect(isDesktopSession(parseRegistryEntry(rest) as never)).toBe(false);
+    expect(parseRegistryEntry({ ...raw, hostSessionId: '' })?.hostSessionId).toBeUndefined();
+    expect(shortHostId('local_054fbaf1-430e-492d')).toBe('054fbaf1');
+    expect(shortHostId('abcdefghijkl')).toBe('abcdefgh');
+  });
   it('只保留 claude-desktop 系列', () => {
     expect(isDesktopSession({ ...(parseRegistryEntry(raw) as object) } as never)).toBe(true);
     expect(isDesktopSession({ ...(parseRegistryEntry(raw) as object), entrypoint: 'cli' } as never)).toBe(false);
@@ -75,5 +84,15 @@ describe('可用性与查找', () => {
     expect(findBySessionId(reg.entries, 's', reg)?.pid).toBe(1);
     expect(bestBySessionId(reg.entries, reg).get('s')?.pid).toBe(1);
     expect(findBySessionId(reg.entries, 'none', reg)).toBeUndefined();
+  });
+  it('同一桌面版会话（hostSessionId）CLI 会话号变了时，各留一个：可用的优先，其次最新的', () => {
+    const reg = new FakeRegistry();
+    reg.add({ sessionId: 'cli-old', pid: 1, hostSessionId: 'local_h', updatedAt: 100 });
+    reg.add({ sessionId: 'cli-new', pid: 2, hostSessionId: 'local_h', updatedAt: 200 });
+    reg.add({ sessionId: 'other', pid: 3, hostSessionId: 'local_o' });
+    expect(bestByHost(reg.entries, reg).get('local_h')?.sessionId).toBe('cli-new');
+    reg.deadPids.add(2);
+    expect(bestByHost(reg.entries, reg).get('local_h')?.sessionId).toBe('cli-old');
+    expect(bestByHost(reg.entries, reg).size).toBe(2);
   });
 });

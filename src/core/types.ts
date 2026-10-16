@@ -9,10 +9,29 @@ export interface RegistryEntry {
   cwd: string;
   entrypoint: string;
   messagingSocketPath: string;
+  /** 桌面版会话 id（local_xxx），不随 CLI 的 sessionId 变化；没有它的不算桌面版会话 */
+  hostSessionId?: string;
   name?: string;
   status?: SessionStatus;
   statusUpdatedAt?: number;
   updatedAt?: number;
+}
+
+/** 桌面版会话存储（claude-code-sessions 下各个 local_xxx.json）里用到的字段 */
+export interface DesktopSession {
+  /** 桌面版会话 id，形如 local_xxx，等于注册文件里的 hostSessionId */
+  hostSessionId: string;
+  /** 当前的 CLI 会话号，会话从没运行过时可能没有 */
+  cliSessionId?: string;
+  title: string;
+  cwd: string;
+  archived: boolean;
+  lastActivityAt: number;
+}
+
+/** 只读：桌面版会话存储。目录不存在或全部无法解析时返回 null（调用方降级为只用注册文件）。 */
+export interface SessionStore {
+  list(): Promise<DesktopSession[] | null>;
 }
 
 /** 会话记录里的一条 user 记录（含工具返回） */

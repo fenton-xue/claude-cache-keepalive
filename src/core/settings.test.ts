@@ -58,16 +58,18 @@ describe('validateContent', () => {
 });
 
 describe('normalizeSettings', () => {
-  it('非对象回退默认值', () => {
-    expect(normalizeSettings(null)).toEqual({ content: DEFAULT_CONTENT, intervalSec: 270, dirs: [] });
-    expect(normalizeSettings('x')).toEqual({ content: DEFAULT_CONTENT, intervalSec: 270, dirs: [] });
+  const base = { schemaVersion: 2, content: DEFAULT_CONTENT, intervalSec: 270, dirs: [], checked: [] };
+  it('非对象回退默认值（全新安装，不需要迁移）', () => {
+    expect(normalizeSettings(null)).toEqual(base);
+    expect(normalizeSettings('x')).toEqual(base);
   });
-  it('坏字段逐项回退，目录去重并保留顺序和折叠状态', () => {
+  it('坏字段逐项回退，工作区去重并保留顺序、折叠状态和成员', () => {
     const s = normalizeSettings({
+      schemaVersion: 2,
       content: '  ping ',
       intervalSec: 10,
       dirs: [
-        { path: '/a', collapsed: true },
+        { path: '/a', collapsed: true, members: ['local_1', 'local_2', 'local_1', 5, ''] },
         { path: '/b' },
         { path: '/a', collapsed: false },
         { path: '' },
@@ -77,12 +79,36 @@ describe('normalizeSettings', () => {
     expect(s.content).toBe('ping');
     expect(s.intervalSec).toBe(270);
     expect(s.dirs).toEqual([
-      { path: '/a', collapsed: true },
-      { path: '/b', collapsed: false },
+      { path: '/a', collapsed: true, members: ['local_1', 'local_2'] },
+      { path: '/b', collapsed: false, members: [] },
     ]);
   });
-  it('不会带出勾选状态等未知字段', () => {
-    const s = normalizeSettings({ content: '1', intervalSec: 120, dirs: [], checked: ['x'] });
-    expect(s).toEqual({ content: '1', intervalSec: 120, dirs: [] });
+  it('一个会话只属于一个工作区：后面的重复成员被丢弃', () => {
+    const s = normalizeSettings({
+      schemaVersion: 2,
+      dirs: [
+        { path: '/a', members: ['local_1'] },
+        { path: '/b', members: ['local_1', 'local_2'] },
+      ],
+    });
+    expect(s.dirs.map((d) => d.members)).toEqual([['local_1'], ['local_2']]);
+  });
+  it('记住的勾选集合：只保留仍是成员的，去重', () => {
+    const s = normalizeSettings({
+      schemaVersion: 2,
+      dirs: [{ path: '/a', members: ['local_1', 'local_2'] }],
+      checked: ['local_2', 'local_9', 'local_2', 7],
+    });
+    expect(s.checked).toEqual(['local_2']);
+  });
+  it('v1.3 及以前的文件（没有 schemaVersion）标为版本 1，目录保留、成员为空，等待迁移', () => {
+    const s = normalizeSettings({ content: '1', intervalSec: 120, dirs: [{ path: '/a', collapsed: true }] });
+    expect(s).toEqual({
+      schemaVersion: 1,
+      content: '1',
+      intervalSec: 120,
+      dirs: [{ path: '/a', collapsed: true, members: [] }],
+      checked: [],
+    });
   });
 });

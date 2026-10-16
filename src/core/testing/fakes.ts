@@ -1,9 +1,11 @@
 import type {
   Clock,
+  DesktopSession,
   RegistryEntry,
   SendTarget,
   Sender,
   SessionRegistry,
+  SessionStore,
   SystemProbe,
   TranscriptPoll,
   TranscriptSource,
@@ -48,6 +50,7 @@ export class FakeRegistry implements SessionRegistry, SystemProbe {
       messagingSocketPath: `/tmp/cc-socks/${e.pid}.sock`,
       status: 'idle',
       name: e.sessionId,
+      hostSessionId: `local_${e.sessionId}`,
       ...e,
     };
     this.entries.push(entry);
@@ -60,6 +63,22 @@ export class FakeRegistry implements SessionRegistry, SystemProbe {
   }
   remove(sessionId: string): void {
     this.entries = this.entries.filter((x) => x.sessionId !== sessionId);
+  }
+}
+
+/** 假的桌面版会话存储：sessions 为空数组表示存在但没有会话，unreadable 表示读不到 */
+export class FakeStore implements SessionStore {
+  sessions: DesktopSession[] = [];
+  unreadable = false;
+
+  async list(): Promise<DesktopSession[] | null> {
+    return this.unreadable ? null : this.sessions.map((s) => ({ ...s }));
+  }
+
+  add(s: Partial<DesktopSession> & { hostSessionId: string }): DesktopSession {
+    const d: DesktopSession = { title: s.hostSessionId, cwd: '/work/proj', archived: false, lastActivityAt: T0, ...s };
+    this.sessions.push(d);
+    return d;
   }
 }
 

@@ -1,7 +1,9 @@
 import type { GroupView, SessionRowView } from '../core/catalog';
 import { coarseDuration, describeFailure, humanDuration } from '../core/format';
 import { CACHE_TTL_MS, formatInterval } from '../core/settings';
-import type { KeepaliveApi, UiState } from '../shared/ipc';
+import type { Candidate } from '../core/catalog';
+import { formatProgress } from '../core/update';
+import type { KeepaliveApi, UiState, UpdateState } from '../shared/ipc';
 
 const api = (window as unknown as { keepalive: KeepaliveApi }).keepalive;
 const $ = <T extends HTMLElement>(sel: string, root: ParentNode = document) => root.querySelector(sel) as T;
@@ -12,6 +14,7 @@ const ICON = {
   up: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 11V3M3.5 6.5 7 3l3.5 3.5"/></svg>',
   down: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3v8M3.5 7.5 7 11l3.5-3.5"/></svg>',
   x: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3.5 3.5l7 7M10.5 3.5l-7 7"/></svg>',
+  plus: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M7 2.5v9M2.5 7h9"/></svg>',
 };
 
 const esc = (t: string) => t.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] as string);
@@ -55,7 +58,7 @@ function clockText(t: number, now: number): string {
 }
 
 function sinceText(r: SessionRowView, gone: boolean, now: number): string {
-  if (gone) return '会话已退出';
+  if (gone) return r.mode === 'gone' ? '会话已退出' : '未运行';
   if (r.status === 'busy' || r.status === 'waiting' || r.status === 'shell') return STATUS_TEXT[r.status] as string;
   if (r.ageMs === null || r.lastRequestAt === null) return '暂无请求记录';
   if (r.coldMs > 0) return `缓存已失效 ${coarseDuration(r.coldMs)}`;
@@ -71,7 +74,7 @@ const rowEls = new Map<string, RowEl>();
 function buildRow(r: SessionRowView): RowEl {
   const li = document.createElement('li');
   li.className = 'row-s';
-  li.dataset.id = r.sessionId;
+  li.dataset.id = r.id;
   li.innerHTML = `
     <label class="chk"><input type="checkbox" aria-label="监控此会话"></label>
     <div class="who">
@@ -84,7 +87,8 @@ function buildRow(r: SessionRowView): RowEl {
       <div class="since"></div>
     </div>
     <div class="count-cell"><div class="bigline"><div class="big"></div><span class="unit"></span></div><div class="cap"></div><div class="bars" hidden><i></i></div></div>
-    <div class="result"></div>`;
+    <div class="result"></div>
+    <button class="iconbtn rm" data-rm type="button" title="从监控中移除" aria-label="移除监控">${ICON.x}</button>`;
   return { li, html: '' };
 }
 
@@ -104,7 +108,8 @@ function updateRow(re: RowEl, r: SessionRowView, s: UiState): void {
   dir.hidden = r.subPath === '';
   setAttr(dir, 'title', r.cwd);
   setText($('.sid', li), r.shortId);
-  setAttr($('.sid', li), 'title', r.sessionId);
+  setAttr($('.sid', li), 'title', `local_${r.id}`);
+  setAttr($('[data-rm]', li), 'aria-label', `移除监控 ${r.name}`);
   setAttr($('.dot', li), 'data-s', gone ? 'off' : (r.status ?? 'idle'));
   setText($('.meta .st', li), gone ? '不可用' : STATUS_TEXT[r.status ?? 'idle'] ?? (r.status as string));
 
@@ -178,6 +183,8 @@ function updateRow(re: RowEl, r: SessionRowView, s: UiState): void {
   const res = r.result;
   if (r.mode === 'gone') {
     html = `<div class="res-bad">会话已退出</div><div class="res-text">勾选已自动取消</div>`;
+  } else if (r.pendingRestore) {
+    html = `<div class="res-text">打开后自动恢复监控</div>`;
   } else if (r.mode === 'expired') {
     html = `<div class="res-text">缓存已超过 5 分钟，现在发送会按未命中缓存计费。</div><button class="btn primary" data-confirm type="button">确认并发送</button>`;
   } else if (r.mode === 'sending') {
@@ -216,15 +223,16 @@ function buildGroup(path: string): GroupEl {
       <span class="gname"></span>
       <span class="gsum"></span>
       <span class="gact">
+        <button class="iconbtn" data-act="add" type="button" title="添加会话">${ICON.plus}</button>
         <button class="iconbtn" data-act="up" type="button" title="上移">${ICON.up}</button>
         <button class="iconbtn" data-act="down" type="button" title="下移">${ICON.down}</button>
-        <button class="iconbtn" data-act="rm" type="button" title="移除目录，停止其下所有会话的监控">${ICON.x}</button>
+        <button class="iconbtn" data-act="rm" type="button" title="移除工作区，停止其下所有会话的监控">${ICON.x}</button>
       </span>
     </div>
     <ul class="grows"></ul>`;
   const empty = document.createElement('li');
   empty.className = 'gempty';
-  empty.textContent = '没有正在运行的会话';
+  empty.innerHTML = '还没有监控的会话<button class="btn sm" data-act="add-empty" type="button">添加会话</button>'; // 常驻可见，空工作区不依赖悬停
   return { li, rows: $('.grows', li) as HTMLUListElement, empty };
 }
 
@@ -244,6 +252,7 @@ function updateGroup(ge: GroupEl, g: GroupView): void {
   setAttr(up, 'aria-label', `上移 ${g.label}`);
   setAttr(down, 'aria-label', `下移 ${g.label}`);
   setAttr($('[data-act=rm]', li), 'aria-label', `移除 ${g.label}`);
+  setAttr($('[data-act=add]', li), 'aria-label', `添加会话到 ${g.label}`);
 
   const sm = g.summary;
   const parts: string[] = [];
@@ -276,9 +285,9 @@ function render(s: UiState): void {
     updateGroup(ge, g);
     const rowList: HTMLElement[] = [];
     for (const r of g.rows) {
-      seenRows.add(r.sessionId);
-      let re = rowEls.get(r.sessionId);
-      if (!re) rowEls.set(r.sessionId, (re = buildRow(r)));
+      seenRows.add(r.id);
+      let re = rowEls.get(r.id);
+      if (!re) rowEls.set(r.id, (re = buildRow(r)));
       updateRow(re, r, s);
       rowList.push(re.li);
     }
@@ -295,15 +304,16 @@ function render(s: UiState): void {
 /* ======================= 设置区 ======================= */
 
 const contentEl = $<HTMLInputElement>('#content');
+const ifieldEl = $('#ifield');
+const conerrEl = $('#conerr');
 const intervalEl = $<HTMLInputElement>('#interval');
 const interrEl = $('#interr');
 const bannerEl = $('#banner');
 
+const editing = () => ifieldEl.dataset.state === 'edit';
+
 function syncSettings(s: UiState): void {
-  if (document.activeElement !== contentEl && contentEl.value !== s.content) {
-    contentEl.value = s.content;
-    contentEl.setAttribute('aria-invalid', 'false');
-  }
+  if (!editing() && contentEl.value !== s.content) contentEl.value = s.content; // 编辑中不覆盖正在输入的内容
   if (document.activeElement !== intervalEl) {
     const v = formatInterval(s.intervalSec);
     if (intervalEl.value !== v) intervalEl.value = v;
@@ -314,16 +324,45 @@ function syncSettings(s: UiState): void {
   setText(bannerEl, s.peerError ?? '');
 }
 
-contentEl.addEventListener('input', async () => {
+/* 发送内容：默认只读，点铅笔编辑，对号保存（回车）、叉号取消（Esc）；编辑中不实时保存，点别处不会丢内容 */
+function setEditing(on: boolean): void {
+  ifieldEl.dataset.state = on ? 'edit' : 'view';
+  contentEl.readOnly = !on;
+  contentEl.value = latest?.content ?? contentEl.value;
+  contentEl.setAttribute('aria-invalid', 'false');
+  setText(conerrEl, '');
+  if (on) {
+    contentEl.focus();
+    contentEl.select();
+  } else {
+    contentEl.blur();
+  }
+}
+async function saveContent(): Promise<void> {
   const err = await api.setContent(contentEl.value);
-  contentEl.setAttribute('aria-invalid', String(err !== null));
-});
-contentEl.addEventListener('blur', () => {
-  if (latest && contentEl.value.trim() === '') {
-    contentEl.value = latest.content;
-    contentEl.setAttribute('aria-invalid', 'false');
+  if (err !== null) {
+    contentEl.setAttribute('aria-invalid', 'true'); // 校验不通过，留在编辑状态
+    setText(conerrEl, err);
+    return;
+  }
+  setEditing(false);
+}
+$('[data-edit]', ifieldEl).addEventListener('click', () => setEditing(true));
+$('[data-ok]', ifieldEl).addEventListener('click', () => void saveContent());
+$('[data-no]', ifieldEl).addEventListener('click', () => setEditing(false));
+contentEl.addEventListener('keydown', (e) => {
+  if (!editing()) return;
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    void saveContent();
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    e.stopPropagation();
+    setEditing(false);
   }
 });
+
+/* 空闲间隔保持直接编辑、实时校验 */
 intervalEl.addEventListener('input', async () => {
   const err = await api.setInterval(intervalEl.value);
   intervalEl.setAttribute('aria-invalid', String(err !== null));
@@ -337,20 +376,205 @@ intervalEl.addEventListener('blur', () => {
   }
 });
 
+/* ======================= 弹层（添加会话、检查更新共用） ======================= */
+
+interface ModalAction {
+  label: string;
+  primary?: boolean;
+  disabled?: boolean;
+  on: () => void;
+}
+interface ModalCfg {
+  title: string;
+  sub?: string;
+  body: Node | string;
+  actions: ModalAction[];
+  /** 点遮罩、按 Esc 时的动作；不给就不允许这样关闭 */
+  onEsc?: () => void;
+}
+const modalEl = $('#modal');
+const modal = {
+  cfg: null as ModalCfg | null,
+  open(cfg: ModalCfg): void {
+    this.cfg = cfg;
+    setText($('#m-title'), cfg.title);
+    const sub = $('#m-sub');
+    setText(sub, cfg.sub ?? '');
+    sub.hidden = !cfg.sub;
+    const body = $('#m-body');
+    if (typeof cfg.body === 'string') body.innerHTML = cfg.body;
+    else body.replaceChildren(cfg.body);
+    this.actions(cfg.actions);
+    modalEl.hidden = false;
+  },
+  actions(list: ModalAction[]): void {
+    const foot = $('#m-foot');
+    foot.replaceChildren(
+      ...list.map((a) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = `btn${a.primary ? ' primary' : ''}`;
+        b.textContent = a.label;
+        b.disabled = a.disabled === true;
+        b.addEventListener('click', a.on);
+        return b;
+      }),
+    );
+    foot.hidden = list.length === 0;
+    $<HTMLButtonElement>('.primary:not(:disabled)', foot)?.focus();
+  },
+  close(): void {
+    modalEl.hidden = true;
+    this.cfg = null;
+  },
+};
+modalEl.addEventListener('mousedown', (e) => {
+  if (e.target === modalEl) modal.cfg?.onEsc?.();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') modal.cfg?.onEsc?.();
+});
+
+/** 添加会话（需求 5.5）：只显示标题和会话号 */
+let addToken = 0;
+async function openAdd(dirPath: string, label: string): Promise<void> {
+  const token = ++addToken;
+  const { items, degraded } = await api.listCandidates(dirPath);
+  if (token !== addToken) return;
+  const sel = new Set<string>();
+  const body = document.createElement('div');
+  if (items.length === 0) body.innerHTML = '<div class="mnone">没有可添加的会话</div>';
+  for (const c of items as Candidate[]) {
+    const row = document.createElement('label');
+    row.className = 'citem';
+    row.innerHTML = `<input type="checkbox"><span class="ct"></span><code></code>`;
+    setText($('.ct', row), c.title);
+    setAttr($('.ct', row), 'title', c.title);
+    setText($('code', row), c.shortId);
+    setAttr($('code', row), 'title', `local_${c.id}`);
+    $('input', row).addEventListener('change', (e) => {
+      if ((e.target as HTMLInputElement).checked) sel.add(c.id);
+      else sel.delete(c.id);
+      refreshActions();
+    });
+    body.append(row);
+  }
+  if (degraded) {
+    const n = document.createElement('div');
+    n.className = 'mnote';
+    n.textContent = '未能读取桌面版会话存储，仅列出正在运行的会话';
+    body.append(n);
+  }
+  const refreshActions = () =>
+    modal.actions([
+      { label: '取消', on: () => modal.close() },
+      {
+        label: sel.size ? `添加 ${sel.size} 个` : '添加',
+        primary: true,
+        disabled: sel.size === 0,
+        on: () => {
+          modal.close();
+          void api.addSessions(dirPath, [...sel]);
+        },
+      },
+    ]);
+  modal.open({ title: '添加会话', sub: label, body, actions: [], onEsc: () => modal.close() });
+  refreshActions();
+}
+
+/* ======================= 检查更新（需求第 14 节） ======================= */
+
+function renderUpdate(u: UpdateState): void {
+  if (u.step === 'idle') {
+    if (modal.cfg?.title === UPDATE_TITLE) modal.close();
+    return;
+  }
+  const text = (main: string, small?: string, bad = false) => {
+    const d = document.createElement('div');
+    d.className = `mtext${bad ? ' bad' : ''}`;
+    d.textContent = main;
+    if (small) {
+      const s = document.createElement('small');
+      s.textContent = small;
+      d.append(s);
+    }
+    return d;
+  };
+  const act = (a: Parameters<KeepaliveApi['updateAction']>[0]) => () => void api.updateAction(a);
+  const cancel: ModalAction = { label: '取消', on: act('cancel') };
+  const okBtn: ModalAction = { label: '好', primary: true, on: act('close') };
+  const open = (body: Node, actions: ModalAction[], escapable = true) =>
+    modal.open({ title: UPDATE_TITLE, body, actions, ...(escapable ? { onEsc: act('cancel') } : {}) });
+  switch (u.step) {
+    case 'checking':
+      open(text('正在检查更新…'), [cancel]);
+      break;
+    case 'latest':
+      open(text(`当前已是最新版本 v${u.current}`), [okBtn]);
+      break;
+    case 'available':
+      open(text(`发现新版本 v${u.latest}（当前 v${u.current}）`), [cancel, { label: '更新', primary: true, on: act('update') }]);
+      break;
+    case 'downloading': {
+      const body = document.createElement('div');
+      body.append(text(`正在下载 v${u.latest}…`));
+      const prog = document.createElement('div');
+      prog.className = 'prog';
+      const bar = document.createElement('i');
+      bar.style.width = u.total ? `${Math.min(100, ((u.received ?? 0) / u.total) * 100)}%` : '0%';
+      prog.append(bar);
+      body.append(prog, text(`已下载 ${formatProgress(u.received ?? 0, u.total)}`));
+      open(body, [cancel]);
+      break;
+    }
+    case 'ready':
+      open(
+        text(
+          `v${u.latest} 已下载完成，安装后应用会自动重启`,
+          u.monitoring ? `当前有 ${u.monitoring} 个会话在监控，监控会在重启后自动恢复，连续次数归零。` : undefined,
+        ),
+        [cancel, { label: '安装', primary: true, on: act('install') }],
+      );
+      break;
+    case 'installing':
+      open(text('正在安装，应用即将重启…'), [], false);
+      break;
+    case 'manual':
+      open(text(u.message ?? '', u.detail), [okBtn]);
+      break;
+    case 'error': {
+      const actions: ModalAction[] = [{ label: '关闭', on: act('close') }];
+      if (u.retry) actions.unshift({ label: '重试', primary: true, on: act('retry') });
+      open(text(u.message ?? '更新失败', undefined, true), actions);
+      break;
+    }
+  }
+}
+const UPDATE_TITLE = 'Keepwarm 更新';
+
 /* ======================= 交互 ======================= */
 
 rowsEl.addEventListener('click', (e) => {
   const target = e.target as HTMLElement;
   const row = target.closest<HTMLElement>('.row-s');
+  const grp = target.closest<HTMLElement>('.grp');
   if (row && target.closest('[data-confirm]')) {
     void api.confirm(row.dataset.id as string);
     return;
   }
-  const grp = target.closest<HTMLElement>('.grp');
+  if (row && grp && target.closest('[data-rm]')) {
+    void api.removeSession(grp.dataset.path as string, row.dataset.id as string);
+    return;
+  }
+  if (grp && target.closest('[data-act=add-empty]')) {
+    void openAdd(grp.dataset.path as string, $('.gname', grp).textContent ?? '');
+    return;
+  }
   if (!grp || !target.closest('.ghead')) return;
   const path = grp.dataset.path as string;
   const act = target.closest<HTMLElement>('[data-act]')?.dataset.act;
-  if (act === 'up') void api.moveDir(path, -1);
+  if (act === 'add') void openAdd(path, $('.gname', grp).textContent ?? '');
+  else if (act === 'up') void api.moveDir(path, -1);
   else if (act === 'down') void api.moveDir(path, 1);
   else if (act === 'rm') void api.removeDir(path);
   else void api.setCollapsed(path, grp.dataset.collapsed !== 'true');
@@ -374,3 +598,5 @@ $('#refresh').addEventListener('click', (e) => {
 
 api.onState(render);
 void api.getState().then(render);
+api.onUpdate(renderUpdate);
+void api.getUpdateState().then(renderUpdate);

@@ -3,23 +3,29 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { OWN_NAME } from '../core/sessions';
 import type { Notice } from '../core/types';
-import { IPC, type UiState } from '../shared/ipc';
+import { IPC, type UiState, type UpdateAction, type UpdateState } from '../shared/ipc';
 import { CcPeerSender } from './ccPeerSender';
 import { Controller } from './controller';
 import { FsProbe, FsRegistry } from './fsRegistry';
+import { FsSessionStore } from './fsSessionStore';
 import { FsTranscripts } from './fsTranscripts';
 import { SettingsStore } from './settingsStore';
 import { cleanupStale } from './staleCleanup';
+import { ElectronUpdateIo } from './updateIo';
+import { Updater } from './updater';
 
 app.setName(OWN_NAME);
 
 const claudeDir = join(homedir(), '.claude');
 const sessionsDir = join(claudeDir, 'sessions');
 const projectsDir = join(claudeDir, 'projects');
+const appSupport = join(homedir(), 'Library', 'Application Support');
+const desktopSessionRoots = [join(appSupport, 'Claude', 'claude-code-sessions'), join(appSupport, 'Claude-3p', 'claude-code-sessions')];
 const socketDir = '/tmp/cc-socks';
 
 let win: BrowserWindow | null = null;
 let controller: Controller | null = null;
+let updater: Updater | null = null;
 let sender: CcPeerSender | null = null;
 let peerError: string | null = null;
 let quitting = false;
@@ -36,6 +42,10 @@ function notify(n: Notice): void {
 
 function push(s: UiState): void {
   if (win && !win.isDestroyed()) win.webContents.send(IPC.state, s);
+}
+
+function pushUpdate(s: UpdateState): void {
+  if (win && !win.isDestroyed()) win.webContents.send(IPC.update, s);
 }
 
 function showWindow(): void {
@@ -74,7 +84,28 @@ function createWindow(): void {
 function buildMenu(): void {
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
-      { role: 'appMenu' },
+      {
+        label: app.name,
+        submenu: [
+          { role: 'about', label: `关于 ${app.name}` },
+          { type: 'separator' },
+          {
+            label: '检查更新…',
+            click: () => {
+              showWindow();
+              updater?.begin();
+            },
+          },
+          { type: 'separator' },
+          { role: 'services' },
+          { type: 'separator' },
+          { role: 'hide' },
+          { role: 'hideOthers' },
+          { role: 'unhide' },
+          { type: 'separator' },
+          { role: 'quit' },
+        ],
+      },
       { role: 'editMenu' },
       {
         label: '工具',
@@ -157,6 +188,7 @@ if (!app.requestSingleInstanceLock()) {
     controller = new Controller({
       clock: { now: () => Date.now() },
       registry: new FsRegistry(sessionsDir),
+      store: new FsSessionStore(desktopSessionRoots),
       probe,
       transcripts: new FsTranscripts(projectsDir),
       sender: peerSender,
@@ -173,6 +205,16 @@ if (!app.requestSingleInstanceLock()) {
       log,
     });
     const c = controller;
+    updater = new Updater({
+      io: new ElectronUpdateIo(app.getPath('exe'), app.getPath('userData')),
+      currentVersion: app.getVersion(),
+      arch: process.arch === 'x64' ? 'x64' : 'arm64',
+      isPackaged: app.isPackaged,
+      monitoringCount: () => c.monitoringCount(),
+      push: pushUpdate,
+      quit: quitCleanly,
+    });
+    const u = updater;
 
     ipcMain.handle(IPC.getState, () => c.getState());
     ipcMain.handle(IPC.addDir, () => c.addDir());
@@ -184,6 +226,11 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.handle(IPC.setChecked, (_e, id: string, on: boolean) => c.setChecked(id, on === true));
     ipcMain.handle(IPC.confirm, (_e, id: string) => c.confirm(id));
     ipcMain.handle(IPC.refresh, () => c.refresh());
+    ipcMain.handle(IPC.listCandidates, (_e, path: string) => c.listCandidates(String(path)));
+    ipcMain.handle(IPC.addSessions, (_e, path: string, ids: string[]) => c.addSessions(String(path), Array.isArray(ids) ? ids.map(String) : []));
+    ipcMain.handle(IPC.removeSession, (_e, path: string, id: string) => c.removeSession(String(path), String(id)));
+    ipcMain.handle(IPC.getUpdateState, () => u.getState());
+    ipcMain.handle(IPC.updateAction, (_e, action: UpdateAction) => u.act(action));
 
     await c.start();
     createWindow();

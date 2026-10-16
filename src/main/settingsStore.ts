@@ -21,7 +21,7 @@ export class SettingsStore {
   save(s: Settings): void {
     mkdirSync(dirname(this.file), { recursive: true });
     const tmp = `${this.file}.tmp`;
-    writeFileSync(tmp, JSON.stringify({ content: s.content, intervalSec: s.intervalSec, dirs: s.dirs }, null, 2));
+    writeFileSync(tmp, JSON.stringify({ schemaVersion: s.schemaVersion, content: s.content, intervalSec: s.intervalSec, dirs: s.dirs, checked: s.checked }, null, 2));
     renameSync(tmp, this.file);
   }
 }

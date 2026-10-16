@@ -25,7 +25,7 @@ button,input{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--cold);outline-offset:2px}
 [hidden]{display:none!important}
 
-.window{height:100vh;display:flex;flex-direction:column;container-type:inline-size;background:var(--paper)}
+.window{height:100vh;display:flex;flex-direction:column;container-type:inline-size;background:var(--paper);position:relative}
 
 /* ---------- 标题栏：与页面同色，红绿灯悬在内容上方 ---------- */
 .titlebar{
@@ -43,7 +43,17 @@ button,input{font:inherit;color:inherit}
 .field input[type=text]{
   height:34px;padding:0 10px;border:1px solid #C9CDC6;border-radius:7px;background:var(--card);min-width:0;
 }
-#content{width:100%}
+#content{width:100%;padding-right:64px}
+.field .err{margin-top:6px}
+.ifield{position:relative}
+.ifield[data-state=view] #content{background:#ECEDE8;border-color:#DDE0DA;cursor:default;text-overflow:ellipsis}
+.ifield[data-state=edit] #content{background:#fff;border-color:var(--ink);box-shadow:0 0 0 3px rgba(23,32,42,.08)}
+.ifield .iacts{position:absolute;right:4px;top:4px;bottom:4px;display:flex;align-items:center;gap:2px}
+.ifield .iconbtn.ok{color:var(--ok)}
+.ifield .iconbtn.ok:hover:not(:disabled){background:rgba(47,143,98,.14);color:var(--ok)}
+.ifield .iconbtn.no:hover:not(:disabled){background:rgba(192,58,43,.12);color:var(--bad)}
+.ifield[data-state=view] [data-ok],.ifield[data-state=view] [data-no]{display:none}
+.ifield[data-state=edit] [data-edit]{display:none}
 #interval{width:100%;font-family:var(--display);font-weight:500;font-size:17px;letter-spacing:.02em;font-variant-numeric:tabular-nums;text-align:center}
 .field input[aria-invalid=true]{border-color:var(--bad);background:var(--bad-soft)}
 .err{color:var(--bad);font-size:12px}
@@ -51,9 +61,6 @@ button,input{font:inherit;color:inherit}
 .banner{padding:8px 10px;border-radius:7px;background:var(--bad-soft);color:var(--bad);font-size:12px}
 
 /* ---------- 列表 ---------- */
-.listhead{display:flex;align-items:center;gap:8px;padding:16px 24px 8px;flex:none}
-.listhead h2{margin:0;font:700 17px/1.2 var(--display);letter-spacing:-.01em}
-.listhead .sp{flex:1}
 .btn{
   height:30px;padding:0 12px;border-radius:7px;border:1px solid #C3C8C0;background:var(--card);cursor:pointer;
   display:inline-flex;align-items:center;gap:6px;
@@ -64,15 +71,19 @@ button,input{font:inherit;color:inherit}
 .btn.primary:hover{background:#26323F}
 .btn svg{width:14px;height:14px}
 .btn.icon{width:30px;padding:0;justify-content:center}
-.btn.spin svg{animation:spin .7s linear}
+.spin svg{animation:spin .7s linear}
 @keyframes spin{to{transform:rotate(360deg)}}
 
 .cols,.row-s{
   display:grid;
-  grid-template-columns:26px minmax(160px,1.05fr) minmax(230px,1.6fr) 120px minmax(170px,1.2fr);
+  grid-template-columns:26px minmax(160px,1.05fr) minmax(230px,1.6fr) 120px minmax(170px,1.2fr) 28px;
   column-gap:18px;align-items:center;padding:0 24px;
 }
-.cols{color:var(--ink-3);font-size:12px;padding-bottom:6px;border-bottom:1px solid var(--line);flex:none}
+.cols{color:var(--ink-3);font-size:12px;height:40px;margin-top:8px;border-bottom:1px solid var(--line);flex:none;position:relative}
+/* 工具按钮在列头行最右端，与下方各行的叉号列对齐；不进网格，不占列宽 */
+.tools{position:absolute;right:20px;top:50%;transform:translateY(-50%);display:flex;gap:2px}
+.tools .iconbtn{width:28px;height:28px}
+.tools .iconbtn svg{width:16px;height:16px}
 .scroller{flex:1;min-height:0;overflow-y:auto}
 .rows,.grows{list-style:none;margin:0;padding:0}
 
@@ -99,7 +110,8 @@ button,input{font:inherit;color:inherit}
 .iconbtn:disabled{opacity:.3;cursor:not-allowed}
 .iconbtn svg{width:14px;height:14px}
 .grp[data-collapsed=true] .grows{display:none}
-.gempty{padding:14px 24px 14px 52px;color:var(--ink-3);border-bottom:1px solid var(--line)}
+.gempty{padding:10px 24px 10px 52px;color:var(--ink-3);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
+.btn.sm{height:26px;padding:0 10px;font-size:12px}
 .grp .row-s{padding-left:38px}
 
 .row-s{
@@ -112,7 +124,9 @@ button,input{font:inherit;color:inherit}
 .row-s[data-mode=failed]::before{background:var(--bad)}
 .row-s[data-mode=capped]::before{background:var(--ok)}
 .row-s[data-mode=watch],.row-s[data-mode=sending],.row-s[data-mode=expired],.row-s[data-mode=failed],.row-s[data-mode=capped]{background:var(--card)}
-.row-s[data-mode=gone]{opacity:.55}
+.row-s[data-mode=gone] .chk,.row-s[data-mode=gone] .who,.row-s[data-mode=gone] .life,.row-s[data-mode=gone] .count-cell{opacity:.55}
+.rm{opacity:0;transition:opacity .12s}
+.row-s:hover .rm,.row-s:focus-within .rm{opacity:1}
 
 .chk input{width:18px;height:18px;margin:0;accent-color:var(--ink);cursor:pointer}
 .chk input:disabled{cursor:not-allowed}
@@ -170,11 +184,33 @@ button,input{font:inherit;color:inherit}
 
 /* 窄窗口：折叠为两行 */
 @container (max-width:860px){
-  .cols{display:none}
-  .row-s{grid-template-columns:26px minmax(0,1fr) 110px;row-gap:10px}
-  .row-s .life{grid-column:2 / 4;grid-row:2}
-  .row-s .result{grid-column:2 / 4;grid-row:3}
+  .cols>span:not(.tools){display:none}
+  .row-s{grid-template-columns:26px minmax(0,1fr) 110px 28px;row-gap:10px}
+  .row-s .life{grid-column:2 / 5;grid-row:2}
+  .row-s .result{grid-column:2 / 5;grid-row:3}
 }
+
+/* ---------- 弹层：添加会话和检查更新共用 ---------- */
+.modal{position:absolute;inset:0;background:rgba(23,32,42,.34);display:flex;justify-content:center;align-items:flex-start;padding-top:84px;z-index:8}
+.mcard{width:min(460px,calc(100% - 48px));max-height:calc(100% - 120px);display:flex;flex-direction:column;background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px rgba(0,0,0,.3),0 20px 50px rgba(20,30,40,.35)}
+.mhead{padding:18px 20px 8px;flex:none}
+.mhead b{display:block;font:700 16px/1.3 var(--display)}
+.mhead span{display:block;color:var(--ink-2);font-size:12px;margin-top:2px}
+.mbody{padding:4px 12px 10px;overflow:auto;min-height:0;flex:1}
+.mtext{padding:4px 8px;color:var(--ink);overflow-wrap:anywhere}
+.mtext.bad{color:var(--bad)}
+.mtext small{display:block;color:var(--ink-2);margin-top:6px;font-size:12px}
+.mfoot{display:flex;justify-content:flex-end;gap:8px;padding:12px 20px;border-top:1px solid var(--line);flex:none}
+.mfoot .btn:disabled{opacity:.4;cursor:not-allowed}
+.mnote{padding:6px 8px 2px;color:var(--ink-3);font-size:12px}
+.citem{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 8px;border-radius:7px;cursor:pointer}
+.citem:hover{background:#ECEDE8}
+.citem input{width:16px;height:16px;margin:0;accent-color:var(--ink)}
+.citem .ct{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+.citem code{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--ink-3)}
+.mnone{padding:22px 8px;text-align:center;color:var(--ink-3)}
+.prog{height:6px;border-radius:3px;background:#E4E6E0;overflow:hidden;margin:12px 8px 6px}
+.prog i{display:block;height:100%;width:0;background:var(--ink);transition:width .2s linear}
 
 @media (prefers-reduced-motion:reduce){
   *{animation:none!important;transition:none!important}

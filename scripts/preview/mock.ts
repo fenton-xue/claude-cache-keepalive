@@ -4,9 +4,9 @@
  */
 import { Controller } from '../../src/main/controller';
 import { defaultSettings, normalizeSettings, type Settings } from '../../src/core/settings';
-import { FakeClock, FakeRegistry, FakeTranscripts } from '../../src/core/testing/fakes';
+import { FakeClock, FakeRegistry, FakeStore, FakeTranscripts } from '../../src/core/testing/fakes';
 import type { SendTarget, Sender } from '../../src/core/types';
-import { IPC, type KeepaliveApi, type UiState } from '../../src/shared/ipc';
+import { IPC, type KeepaliveApi, type UiState, type UpdateState } from '../../src/shared/ipc';
 
 void IPC;
 const W = '/Users/fenton/Documents/Workspace';
@@ -16,6 +16,7 @@ const CANDIDATES = [`${W}/emm`, '/Users/fenton/Documents/Codex/claude-cache-keep
 let speed = 1;
 const clock = new FakeClock(Date.now());
 const reg = new FakeRegistry();
+const store = new FakeStore();
 const tr = new FakeTranscripts();
 const failKind = new Map<string, string>();
 let controller: Controller;
@@ -56,6 +57,15 @@ function seed(): void {
   sess('91d2e6b4-77a0-4c35-8e0f-12c4b6a9d7e1', '周报整理', `${W}/FentonWorkspace`, 150);
   sess('c07f58aa-2e91-4d6b-b3a8-4f90e1d25c77', 'emm 调试', `${W}/emm`, 200);
   failKind.set('91d2e6b4-77a0-4c35-8e0f-12c4b6a9d7e1', 'held');
+  /* 没在运行的会话：只出现在会话存储里，添加会话弹窗能看到 */
+  const n = clock.now();
+  for (const e of reg.entries) store.add({ hostSessionId: e.hostSessionId as string, cliSessionId: e.sessionId, title: e.name as string, cwd: e.cwd, lastActivityAt: n - 60_000 });
+  const closed = (id: string, title: string, cwd: string, agoMin: number, archived = false) =>
+    store.add({ hostSessionId: `local_${id}`, cliSessionId: id, title, cwd, archived, lastActivityAt: n - agoMin * 60_000 });
+  closed('a41b7c92-0d3e-4f65-b8a1-7e2c9d05f310', 'Keepwarm 发版流程梳理', `${W}/TypescriptCode/claude-cache-keepalive`, 120);
+  closed('b82c9d03-1e4f-4a76-c9b2-8f3d0e16a421', '桌面版会话存储结构调研', `${W}/TypescriptCode/claude-cache-keepalive`, 1440);
+  closed('c93d0e14-2f5a-4b87-dac3-9a4e1f27b532', '旧版需求草稿（已归档）', `${W}/TypescriptCode/claude-cache-keepalive`, 9 * 1440, true);
+  closed('d04e1f25-3a6b-4c98-ebd4-ab5f2a38c643', 'ones-page 性能排查', `${W}/TypescriptCode/ones-page`, 3 * 1440);
   setTimeout(() => {
     const e = byName('Claude 缓存保活需求文档');
     if (e) {
@@ -67,6 +77,7 @@ function seed(): void {
 
 const KEY = 'keepalive-preview';
 const subs = new Set<(s: UiState) => void>();
+const updateSubs = new Set<(s: UpdateState) => void>();
 let pending = 0;
 let candidateIdx = 0;
 
@@ -78,7 +89,12 @@ function loadSettings(): Settings {
     /* 用默认值 */
   }
   const d = defaultSettings();
-  d.dirs = SEED_DIRS.map((path) => ({ path, collapsed: false }));
+  // 与升级迁移的结果一致：每个目录里当时运行中的会话成为成员
+  d.dirs = SEED_DIRS.map((path) => ({
+    path,
+    collapsed: false,
+    members: reg.entries.filter((e) => e.cwd === path || e.cwd.startsWith(`${path}/`)).map((e) => e.hostSessionId as string),
+  }));
   return d;
 }
 
@@ -86,6 +102,7 @@ seed();
 controller = new Controller({
   clock,
   registry: reg,
+  store,
   probe: reg,
   transcripts: tr,
   sender: new DemoSender(),
@@ -119,6 +136,15 @@ const api: KeepaliveApi = {
   setChecked: (id, on) => controller.setChecked(id, on),
   confirm: (id) => controller.confirm(id),
   refresh: () => controller.refresh(),
+  listCandidates: async (p) => controller.listCandidates(p),
+  addSessions: (p, ids) => controller.addSessions(p, ids),
+  removeSession: async (p, id) => controller.removeSession(p, id),
+  getUpdateState: async (): Promise<UpdateState> => ({ step: 'idle', current: '0.2.0' }),
+  onUpdate: (cb) => {
+    updateSubs.add(cb);
+    return () => updateSubs.delete(cb);
+  },
+  updateAction: async () => undefined,
 };
 (window as unknown as { keepalive: KeepaliveApi }).keepalive = api;
 
@@ -152,6 +178,7 @@ void controller.start();
     const e = byName(name);
     if (e) failKind.set(e.sessionId, kind);
   },
+  update: (s: UpdateState) => updateSubs.forEach((cb) => cb(s)),
   reset: () => {
     localStorage.removeItem(KEY);
     location.reload();

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Claude Cache Keepalive</title>
+<title>Keepwarm 原型 v1.4</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&display=swap" rel="stylesheet">
@@ -33,7 +33,7 @@ body{
   color:var(--ink);
   background:var(--desk);
   min-height:100vh;
-  padding:32px 24px;
+  padding:56px 24px 32px;
 }
 button,input,select{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--cold);outline-offset:2px}
@@ -48,9 +48,12 @@ button,input,select{font:inherit;color:inherit}
   box-shadow:0 0 0 .5px rgba(0,0,0,.35),0 24px 60px rgba(20,30,40,.35);
   overflow:hidden;
   container-type:inline-size;
+  position:relative;display:flex;flex-direction:column;
+  height:calc(100vh - 96px);min-height:560px;max-height:880px;
 }
+.scroller{flex:1;min-height:0;overflow:auto}
 .titlebar{
-  height:40px;display:flex;align-items:center;padding:0 14px;
+  height:40px;display:flex;align-items:center;padding:0 14px;flex:none;
   background:#E7E8E3;border-bottom:1px solid var(--line);
   position:relative;
 }
@@ -67,22 +70,31 @@ button,input,select{font:inherit;color:inherit}
   padding:20px 24px 18px;border-bottom:1px solid var(--line);
 }
 .settings .err{grid-column:1 / 3;margin:0}
+.field .err{margin-top:6px}
 .field label{display:block;font-weight:600;margin-bottom:6px}
 .field .row{display:flex;align-items:center;gap:10px}
 .field input[type=text]{
   height:34px;padding:0 10px;border:1px solid #C9CDC6;border-radius:7px;background:var(--card);
   min-width:0;
 }
-#content{width:100%}
+.ifield{position:relative}
+#content{width:100%;padding-right:64px}
+.ifield[data-state=view] #content{background:#ECEDE8;border-color:#DDE0DA;cursor:default;text-overflow:ellipsis}
+.ifield[data-state=edit] #content{background:#fff;border-color:var(--ink);box-shadow:0 0 0 3px rgba(23,32,42,.08)}
+.ifield .iacts{position:absolute;right:4px;top:4px;bottom:4px;display:flex;align-items:center;gap:2px}
+.ifield .iconbtn{width:26px;height:26px}
+.ifield .iconbtn.ok{color:var(--ok)}
+.ifield .iconbtn.ok:hover{background:rgba(47,143,98,.14);color:var(--ok)}
+.ifield .iconbtn.no:hover{background:rgba(192,58,43,.12);color:var(--bad)}
+.ifield[data-state=view] [data-edit]{display:grid}
+.ifield[data-state=view] [data-ok],.ifield[data-state=view] [data-no]{display:none}
+.ifield[data-state=edit] [data-edit]{display:none}
 #interval{width:100%;font-family:var(--display);font-weight:500;font-size:17px;letter-spacing:.02em;font-variant-numeric:tabular-nums;text-align:center}
 .field input[aria-invalid=true]{border-color:var(--bad);background:var(--bad-soft)}
 .err{color:var(--bad);font-size:12px}
 .err:empty{display:none}
 
 /* ---------- list ---------- */
-.listhead{display:flex;align-items:center;gap:8px;padding:16px 24px 8px}
-.listhead h2{margin:0;font:700 17px/1.2 var(--display);letter-spacing:-.01em}
-.listhead .sp{flex:1}
 .btn{
   height:30px;padding:0 12px;border-radius:7px;border:1px solid #C3C8C0;background:var(--card);cursor:pointer;
   display:inline-flex;align-items:center;gap:6px;
@@ -98,10 +110,14 @@ button,input,select{font:inherit;color:inherit}
 
 .cols,.row-s{
   display:grid;
-  grid-template-columns:26px minmax(160px,1.05fr) minmax(230px,1.6fr) 120px minmax(170px,1.2fr);
+  grid-template-columns:26px minmax(160px,1.05fr) minmax(230px,1.6fr) 120px minmax(170px,1.2fr) 28px;
   column-gap:18px;align-items:center;padding:0 24px;
 }
-.cols{color:var(--ink-3);font-size:12px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.cols{color:var(--ink-3);font-size:12px;height:40px;border-bottom:1px solid var(--line);position:relative;flex:none}
+/* 工具按钮在列头行最右端，与下方各行的叉号列对齐；不进网格，不占列宽 */
+.tools{position:absolute;right:20px;top:50%;transform:translateY(-50%);display:flex;gap:2px}
+.tools .iconbtn{width:28px;height:28px}
+.tools .iconbtn svg{width:16px;height:16px}
 .rows,.grows{list-style:none;margin:0;padding:0}
 
 /* 目录分组 */
@@ -126,11 +142,12 @@ button,input,select{font:inherit;color:inherit}
 .iconbtn:disabled{opacity:.3;cursor:not-allowed}
 .iconbtn svg{width:14px;height:14px}
 .grp[data-collapsed=true] .grows{display:none}
-.gempty{padding:14px 24px 14px 52px;color:var(--ink-3);border-bottom:1px solid var(--line)}
+.gempty{padding:10px 24px 10px 52px;color:var(--ink-3);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
+.btn.sm{height:26px;padding:0 10px;font-size:12px}
 .grp .row-s{padding-left:38px}
 
 .pop{
-  position:absolute;right:24px;top:100%;width:380px;z-index:5;
+  position:absolute;right:0;top:calc(100% + 6px);width:380px;z-index:5;
   background:var(--card);border:1px solid #C9CDC6;border-radius:10px;padding:6px;
   box-shadow:0 12px 32px rgba(20,30,40,.22);
 }
@@ -139,7 +156,6 @@ button,input,select{font:inherit;color:inherit}
 .pop .pitem b{display:block;font-weight:600}
 .pop .pitem span{display:block;color:var(--ink-2);font-size:12px}
 .pop .pnone{padding:10px;color:var(--ink-3)}
-.listhead{position:relative}
 .row-s{
   padding-top:14px;padding-bottom:14px;border-bottom:1px solid var(--line);
   position:relative;background:transparent;transition:background .2s;
@@ -152,8 +168,10 @@ button,input,select{font:inherit;color:inherit}
 .row-s[data-mode=failed]::before{background:var(--bad)}
 .row-s[data-mode=capped]::before{background:var(--ok)}
 .row-s[data-mode=watch],.row-s[data-mode=sending],.row-s[data-mode=expired],.row-s[data-mode=failed],.row-s[data-mode=capped]{background:var(--card)}
-.row-s[data-mode=gone]{opacity:.55}
+.row-s[data-mode=gone] .chk,.row-s[data-mode=gone] .who,.row-s[data-mode=gone] .life,.row-s[data-mode=gone] .count-cell{opacity:.55}
 
+.rm{opacity:0;transition:opacity .12s;width:26px;height:26px}
+.row-s:hover .rm,.row-s:focus-within .rm{opacity:1}
 .chk input{width:18px;height:18px;margin:0;accent-color:var(--ink);cursor:pointer}
 .chk input:disabled{cursor:not-allowed}
 
@@ -177,12 +195,7 @@ button,input,select{font:inherit;color:inherit}
 .fill[data-cold=true]{background:var(--cold)}
 .row-s[data-mode=off] .fill:not([data-cold=true]){background:#D4B26A}
 .tick{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink);border-radius:1px}
-.scale{position:relative;height:16px;margin-top:3px;font-size:11px;color:var(--ink-3)}
-.scale span{position:absolute;top:0;white-space:nowrap}
-.scale .s0{left:0}
-.scale .s5{right:0}
-.scale .st{transform:translateX(-100%);padding-right:5px;color:var(--ink-2)}
-.since{font-size:12px;color:var(--ink-2)}
+.since{font-size:12px;color:var(--ink-2);margin-top:5px}
 
 /* 倒计时 */
 .count-cell{text-align:left}
@@ -211,11 +224,46 @@ button,input,select{font:inherit;color:inherit}
 
 /* 窄窗口：折叠为两行 */
 @container (max-width:860px){
-  .cols{display:none}
-  .row-s{grid-template-columns:26px minmax(0,1fr) 110px;row-gap:10px}
-  .row-s .life{grid-column:2 / 4;grid-row:2}
-  .row-s .result{grid-column:2 / 4;grid-row:3}
+  .cols>span{display:none}
+  .row-s{grid-template-columns:26px minmax(0,1fr) 110px 28px;row-gap:10px}
+  .row-s .life{grid-column:2 / 5;grid-row:2}
+  .row-s .result{grid-column:2 / 5;grid-row:3}
 }
+
+/* ---------- 弹层：添加会话和检查更新共用 ---------- */
+.modal{position:absolute;inset:0;background:rgba(23,32,42,.34);display:flex;justify-content:center;align-items:flex-start;padding-top:84px;z-index:8}
+.modal[hidden]{display:none}
+.mcard{width:min(460px,calc(100% - 48px));max-height:calc(100% - 120px);display:flex;flex-direction:column;background:var(--card);border-radius:12px;box-shadow:0 0 0 .5px rgba(0,0,0,.3),0 20px 50px rgba(20,30,40,.35)}
+.mhead{padding:18px 20px 8px;flex:none}
+.mhead b{display:block;font:700 16px/1.3 var(--display)}
+.mhead span{display:block;color:var(--ink-2);font-size:12px;margin-top:2px}
+.mbody{padding:4px 12px 10px;overflow:auto;min-height:0;flex:1}
+.mbody .mtext{padding:4px 8px;color:var(--ink)}
+.mbody .mtext.bad{color:var(--bad)}
+.mbody .mtext small{display:block;color:var(--ink-2);margin-top:6px;font-size:12px}
+.mfoot{display:flex;justify-content:flex-end;gap:8px;padding:12px 20px;border-top:1px solid var(--line);flex:none}
+.mfoot .btn:disabled{opacity:.4;cursor:not-allowed}
+.citem{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 8px;border-radius:7px;cursor:pointer}
+.citem:hover{background:#ECEDE8}
+.citem input{width:16px;height:16px;margin:0;accent-color:var(--ink)}
+.citem .ct{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+.citem code{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--ink-3)}
+.mnone{padding:22px 8px;text-align:center;color:var(--ink-3)}
+.prog{height:6px;border-radius:3px;background:#E4E6E0;overflow:hidden;margin:12px 8px 6px}
+.prog i{display:block;height:100%;width:0;background:var(--ink);transition:width .2s linear}
+
+/* ---------- 模拟 macOS 菜单栏（仅原型：真实菜单栏在系统里） ---------- */
+.menubar{position:fixed;left:0;right:0;top:0;height:26px;z-index:30;display:flex;align-items:center;gap:2px;padding:0 10px;background:rgba(240,241,238,.92);backdrop-filter:blur(14px);font-size:13px;border-bottom:1px solid rgba(0,0,0,.12)}
+.menubar .mi{padding:2px 9px;border-radius:5px;position:relative;cursor:default;user-select:none}
+.menubar .mi.app{font-weight:700}
+.menubar .mi.on{background:var(--cold);color:#fff}
+.menubar .apple{width:14px;height:14px;margin-right:6px;border-radius:50%;background:var(--ink);opacity:.8}
+.mmenu{position:fixed;top:26px;left:34px;min-width:230px;background:rgba(250,250,247,.96);backdrop-filter:blur(18px);border-radius:8px;padding:5px;box-shadow:0 10px 30px rgba(0,0,0,.28),0 0 0 .5px rgba(0,0,0,.25);z-index:31}
+.mmenu[hidden]{display:none}
+.mmenu button{display:flex;justify-content:space-between;width:100%;text-align:left;border:0;background:none;padding:4px 10px;border-radius:5px;cursor:default;font-size:13px}
+.mmenu button:hover{background:var(--cold);color:#fff}
+.mmenu hr{border:0;border-top:1px solid rgba(0,0,0,.12);margin:5px 6px}
+.mmenu button span{opacity:.55}
 
 /* ---------- 演示面板 ---------- */
 .demo{
@@ -253,18 +301,39 @@ button,input,select{font:inherit;color:inherit}
 </style>
 </head>
 <body>
+<div class="menubar" aria-label="模拟 macOS 菜单栏">
+  <span class="apple" aria-hidden="true"></span>
+  <span class="mi app" id="mi-app" tabindex="0">Keepwarm</span>
+  <span class="mi">编辑</span><span class="mi">工具</span><span class="mi">窗口</span>
+</div>
+<div class="mmenu" id="mmenu" hidden>
+  <button type="button">关于 Keepwarm</button>
+  <hr>
+  <button type="button" id="mi-update">检查更新…</button>
+  <hr>
+  <button type="button">隐藏 Keepwarm <span>⌘H</span></button>
+  <button type="button">退出 Keepwarm <span>⌘Q</span></button>
+</div>
 <div class="stage">
 
-  <main class="window" aria-label="Claude Cache Keepalive">
+  <main class="window" aria-label="Keepwarm">
     <div class="titlebar">
       <div class="lights" aria-hidden="true"><i></i><i></i><i></i></div>
-      <div class="wtitle">Claude Cache Keepalive</div>
+      <div class="wtitle">Keepwarm</div>
     </div>
 
     <form class="settings" id="settings" onsubmit="return false">
       <div class="field">
         <label for="content">发送内容</label>
-        <input type="text" id="content" value="1" autocomplete="off">
+        <div class="ifield" id="ifield" data-state="view">
+          <input type="text" id="content" value="1" autocomplete="off" readonly>
+          <span class="iacts">
+            <button class="iconbtn" data-edit type="button" title="编辑" aria-label="编辑发送内容"><svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.6 2.4l2 2L5 11l-2.8.8L3 9z"/></svg></button>
+            <button class="iconbtn ok" data-ok type="button" title="保存" aria-label="保存"><svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.8 7.6l2.8 2.8L11.2 4.4"/></svg></button>
+            <button class="iconbtn no" data-no type="button" title="取消" aria-label="取消"><svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3.5 3.5l7 7M10.5 3.5l-7 7"/></svg></button>
+          </span>
+        </div>
+        <div class="err" id="conerr" role="alert"></div>
       </div>
       <div class="field">
         <label for="interval">空闲间隔</label>
@@ -273,28 +342,28 @@ button,input,select{font:inherit;color:inherit}
       <div class="err" id="interr" role="alert"></div>
     </form>
 
-    <div class="listhead">
-      <h2>会话</h2>
-      <span class="sp"></span>
-      <button class="btn icon" id="add-dir" type="button" title="添加目录" aria-label="添加目录" aria-haspopup="true" aria-expanded="false">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>
-      </button>
-      <div class="pop" id="pop" hidden>
-        <div id="pop-items"></div>
-      </div>
-      <button class="btn icon" id="refresh" type="button" title="刷新" aria-label="刷新">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8a5.5 5.5 0 1 1-1.7-4"/><path d="M13 2v3h-3"/></svg>
-      </button>
+    <div class="cols">
+      <span aria-hidden="true"></span><span aria-hidden="true">会话</span><span aria-hidden="true">缓存余温</span><span aria-hidden="true">倒计时</span><span aria-hidden="true">最近一次发送</span><span aria-hidden="true"></span>
+      <span class="tools">
+        <button class="iconbtn" id="add-dir" type="button" title="添加工作区" aria-label="添加工作区" aria-haspopup="true" aria-expanded="false"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M1.8 4.2c0-.7.5-1.2 1.2-1.2h3l1.4 1.6H13c.7 0 1.2.5 1.2 1.2v6c0 .7-.5 1.2-1.2 1.2H3c-.7 0-1.2-.5-1.2-1.2z"/><path d="M8 7v3.4M6.3 8.7h3.4"/></svg></button>
+        <button class="iconbtn" id="refresh" type="button" title="刷新" aria-label="刷新"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8a5.5 5.5 0 1 1-1.7-4"/><path d="M13 2v3h-3"/></svg></button>
+      </span>
     </div>
-
-    <div class="cols" aria-hidden="true">
-      <span></span><span>会话</span><span>缓存余温</span><span>倒计时</span><span>最近一次发送</span>
-    </div>
+    <div class="scroller">
     <ul class="rows" id="rows"></ul>
     <div class="empty" id="empty" hidden>
-      <b>还没有添加目录</b>
-      <div style="margin-bottom:14px">添加项目目录后，其中正在运行的会话会出现在这里。</div>
-      <button class="btn primary" id="add-dir-empty" type="button">添加目录</button>
+      <b>还没有添加工作区</b>
+      <div style="margin-bottom:14px">添加工作区后，再从中选择要监控的会话。</div>
+      <span style="position:relative;display:inline-block"><button class="btn primary" id="add-dir-empty" type="button">添加工作区</button><span id="pop-slot-empty"></span></span>
+    </div>
+    </div>
+    <div class="pop" id="pop" hidden><div id="pop-items"></div></div>
+    <div class="modal" id="modal" hidden>
+      <div class="mcard" role="dialog" aria-modal="true" aria-labelledby="m-title">
+        <div class="mhead"><b id="m-title"></b><span id="m-sub"></span></div>
+        <div class="mbody" id="m-body"></div>
+        <div class="mfoot" id="m-foot"></div>
+      </div>
     </div>
 
   </main>
@@ -329,12 +398,24 @@ button,input,select{font:inherit;color:inherit}
         <option value="dropped">dropped 被丢弃</option>
         <option value="timeout">超时无回执</option>
       </select>
-      <div class="note">「周报整理」默认每次都会被挂起（held），模拟目标会话不是 bypass 模式。</div>
+      <div class="grid"><button class="btn" id="d-open">重新打开会话</button><button class="btn" id="d-arch">在桌面版归档</button></div>
+      <div class="note">「周报整理」默认每次都会被挂起（held），模拟目标会话不是 bypass 模式。刷新页面可看到勾选状态恢复（6.4）：未运行的会话显示“打开后自动恢复”。</div>
+    </section>
+
+    <section>
+      <label for="upscn">检查更新场景（菜单栏 Keepwarm → 检查更新…）</label>
+      <select id="upscn">
+        <option value="new">有新版本，顺利安装</option>
+        <option value="latest">已是最新版本</option>
+        <option value="net">网络失败</option>
+        <option value="badsum">校验失败</option>
+        <option value="nowrite">没有写权限</option>
+      </select>
     </section>
 
     <section>
       <div class="grid" style="margin-top:0">
-        <button class="btn" id="d-empty">清空目录</button>
+        <button class="btn" id="d-empty">清空工作区</button>
         <button class="btn" id="d-reset">重置全部</button>
       </div>
     </section>
@@ -352,14 +433,15 @@ const TTL = 300;                 // 缓存有效期（秒），固定
 const SEND_TIMEOUT = 30;
 const MIN_I = 60, MAX_I = 290;
 const $ = (s, r = document) => r.querySelector(s);
+const KEY = 'keepalive-proto-v14';
 
 const S = {
   speed: 1,
   vnow: Date.now() / 1000,       // 虚拟时间（秒）
   interval: 270,
-  content: '1',
-  sessions: [],
-  dirs: [],                      // 已添加目录：{ path, collapsed, ids }，数组顺序即显示顺序
+  content: 'Test message',
+  sessions: [],                  // 桌面版全部会话（含未运行、已归档），id 即桌面版会话 id
+  dirs: [],                      // 工作区：{ path, collapsed, members: [会话 id]（手动添加）}，数组顺序即显示顺序
 };
 const W = '/Users/fenton/Documents/Workspace';
 const SEED_DIRS = [`/Users/fenton/Documents/Claude`, `${W}/TypescriptCode/claude-cache-keepalive`, `${W}/TypescriptCode/ones-page`, `${W}/FentonWorkspace`];
@@ -375,54 +457,82 @@ const human = s => {
   return r ? `${m} 分 ${r} 秒` : `${m} 分钟`;
 };
 const cap = () => Math.floor(7200 / S.interval);
+const esc = t => t.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const find = id => S.sessions.find(s => s.id === id);
+const down = s => s.status === 'exited' || s.status === 'closed';      // 不可用：已退出，或根本没在运行
+const MON_MODES = ['watch', 'sending', 'expired'];
 
 function seed() {
-  const n = S.vnow;
+  const n = S.vnow, H = 3600, D = 86400;
   S.sessions = [
     { id: '0cfe2f58-0946-4519-80af-73812835f195', name: '打招呼', cwd: '/Users/fenton/Documents/Claude', status: 'idle', lastReq: n - 70 },
     { id: '6e8d4425-1853-4e73-a4da-6cf45a68a024', name: 'Claude 缓存保活需求文档', cwd: `${W}/TypescriptCode/claude-cache-keepalive`, status: 'busy', lastReq: n - 5, busyUntil: n + 45 },
     { id: '8a3c10de-6b42-4f17-93ad-5e0b7c21f9a6', name: '缓存保活原型调整', cwd: `${W}/TypescriptCode/claude-cache-keepalive/.claude/worktrees/ui-polish`, status: 'idle', lastReq: n - 100 },
     { id: '3b91a7c0-5d1e-4f82-9c14-aa27de6310f4', name: 'ones-page 重构', cwd: `${W}/TypescriptCode/ones-page`, status: 'idle', lastReq: n - 7 * 60 },
-    { id: 'f2e6a904-1c7d-4b58-8d3e-90a4c6b17e25', name: 'ones-page 评审', cwd: `${W}/TypescriptCode/ones-page`, status: 'exited', lastReq: n - 40 * 60 },
     { id: '91d2e6b4-77a0-4c35-8e0f-12c4b6a9d7e1', name: '周报整理', cwd: `${W}/FentonWorkspace`, status: 'idle', lastReq: n - 150, failKind: 'held', failSticky: true },
     { id: 'c07f58aa-2e91-4d6b-b3a8-4f90e1d25c77', name: 'emm 调试', cwd: `${W}/emm`, status: 'idle', lastReq: n - 200 },
-  ].map(s => Object.assign({ mon: false, mode: 'off', streak: 0, result: null, gone: null }, s));
+    /* 没有在运行的会话：只能在添加弹窗里看到，添加后显示“不可用” */
+    { id: 'f2e6a904-1c7d-4b58-8d3e-90a4c6b17e25', name: 'ones-page 评审', cwd: `${W}/TypescriptCode/ones-page`, status: 'closed', lastReq: n - 40 * 60 },
+    { id: 'a41b7c92-0d3e-4f65-b8a1-7e2c9d05f310', name: 'Keepwarm 发版流程梳理', cwd: `${W}/TypescriptCode/claude-cache-keepalive`, status: 'closed', lastReq: n - 2 * H },
+    { id: 'b82c9d03-1e4f-4a76-c9b2-8f3d0e16a421', name: '桌面版会话存储结构调研', cwd: `${W}/TypescriptCode/claude-cache-keepalive`, status: 'closed', lastReq: n - 1 * D },
+    { id: 'c93d0e14-2f5a-4b87-dac3-9a4e1f27b532', name: '旧版需求草稿（已归档）', cwd: `${W}/TypescriptCode/claude-cache-keepalive`, status: 'closed', lastReq: n - 9 * D, archived: true },
+    { id: 'd04e1f25-3a6b-4c98-ebd4-ab5f2a38c643', name: 'ones-page 性能排查', cwd: `${W}/TypescriptCode/ones-page`, status: 'closed', lastReq: n - 3 * D },
+    { id: 'e15f2a36-4b7c-4da9-fce5-bc6a3b49d754', name: '周报模板', cwd: `${W}/FentonWorkspace`, status: 'closed', lastReq: n - 5 * D },
+  ].map(s => Object.assign({ mon: false, mode: 'off', streak: 0, result: null, gone: null, archived: false, pending: false }, s, { updated: s.lastReq }));
 }
 
-/* ============ 目录 ============ */
+/* ============ 工作区 ============ */
 const base = p => p.split('/').filter(Boolean).pop();
 const parent = p => base(p.split('/').slice(0, -1).join('/'));
 function dirLabel(d) {                         // 只显示最后一级；同名时追加上一级目录名
   const dup = S.dirs.filter(x => base(x.path) === base(d.path)).length > 1;
   return dup ? `${base(d.path)}（${parent(d.path)}）` : base(d.path);
 }
-function owner(s) {                            // 目录本身及子目录都算；嵌套时取最深的目录
+function owner(s) {                            // 只用于添加弹窗的候选范围：目录本身及子目录都算；嵌套时取最深的
   let best = null;
   for (const d of S.dirs) if (s.cwd === d.path || s.cwd.startsWith(d.path + '/')) if (!best || d.path.length > best.path.length) best = d;
   return best;
 }
-function save() { localStorage.setItem('keepalive-proto', JSON.stringify({ dirs: S.dirs.map(d => ({ path: d.path, collapsed: d.collapsed })), interval: S.interval, content: S.content })); }
+const stop = s => { s.mon = false; s.mode = 'off'; s.streak = 0; s.pending = false; if (s.result && !s.result.ok) s.result = null; };
+function save() {
+  localStorage.setItem(KEY, JSON.stringify({
+    dirs: S.dirs.map(d => ({ path: d.path, collapsed: d.collapsed, members: d.members })),
+    interval: S.interval, content: S.content,
+    mon: S.sessions.filter(s => s.pending || (s.mon && MON_MODES.includes(s.mode))).map(s => s.id),   // 6.4：监控中、发送中、已过期，加上待恢复的
+  }));
+}
+function restoreCheck(s) { s.mon = true; s.streak = 0; s.mode = (S.vnow - s.lastReq) > TTL ? 'expired' : 'watch'; }
 function load() {
   try {
-    const v = JSON.parse(localStorage.getItem('keepalive-proto'));
+    const v = JSON.parse(localStorage.getItem(KEY));
     if (!v) return false;
-    S.dirs = v.dirs.map(d => ({ ...d, ids: null })); S.interval = v.interval; S.content = v.content;
+    S.dirs = v.dirs.map(d => ({ ...d, ids: null }));
+    S.interval = v.interval; S.content = v.content;
     $('#interval').value = mmss(S.interval); $('#content').value = S.content;
+    for (const id of v.mon || []) { const s = find(id); if (!s) continue; if (down(s)) s.pending = true; else restoreCheck(s); }
     return true;
   } catch { return false; }
 }
+function seedDirs() {                          // 5.7 迁移：每个旧目录里当时正在运行的会话成为成员
+  S.dirs = SEED_DIRS.map(path => ({ path, collapsed: false, ids: null, members: [] }));
+  for (const s of S.sessions) { const d = owner(s); if (d && !down(s) && !s.archived) d.members.push(s.id); }
+  S.dirs = S.dirs.filter(d => d.members.length);
+}
 function addDir(path) {
   if (S.dirs.some(d => d.path === path)) return;
-  S.dirs.push({ path, collapsed: false, ids: null }); save(); render(true);
+  S.dirs.push({ path, collapsed: false, ids: null, members: [] }); render(true);   // 新工作区默认是空的
 }
-function removeDir(d) {                        // 移除目录：其下会话立即停止监控
-  S.sessions.filter(s => owner(s) === d).forEach(s => { s.mon = false; s.mode = 'off'; s.streak = 0; if (s.result && !s.result.ok) s.result = null; });
-  S.dirs = S.dirs.filter(x => x !== d); save(); render();
+function removeDir(d) {                        // 移除工作区：其下会话立即停止监控，成员关系一并删除
+  d.members.forEach(id => stop(find(id)));
+  S.dirs = S.dirs.filter(x => x !== d); render();
+}
+function removeMember(d, s) {                  // 5.6：只是移除监控，桌面版里的会话不受影响
+  stop(s); d.members = d.members.filter(id => id !== s.id); render();
 }
 function moveDir(d, delta) {
   const i = S.dirs.indexOf(d), j = i + delta;
   if (j < 0 || j >= S.dirs.length) return;
-  [S.dirs[i], S.dirs[j]] = [S.dirs[j], S.dirs[i]]; save(); render();
+  [S.dirs[i], S.dirs[j]] = [S.dirs[j], S.dirs[i]]; render();
 }
 
 /* ============ 行 DOM（只创建一次，之后局部更新） ============ */
@@ -440,20 +550,24 @@ function buildRow(s) {
     </div>
     <div class="life">
       <div class="track"><div class="fill"></div><div class="zone"></div><i class="tick"></i></div>
-      <div class="scale"><span class="s0">0:00</span><span class="st">发送点</span></div>
       <div class="since"></div>
     </div>
     <div class="count-cell"><div class="big"></div><div class="cap"></div><div class="bars" hidden><i></i></div></div>
-    <div class="result"></div>`;
+    <div class="result"></div>
+    <button class="iconbtn rm" type="button" title="从监控中移除" aria-label="移除监控"><svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3.5 3.5l7 7M10.5 3.5l-7 7"/></svg></button>`;
   s.el = li;
   $('.name', li).textContent = s.name;
   $('.name', li).title = s.name;
   $('.dir', li).title = s.cwd;
   $('.sid', li).textContent = '  ' + s.id.slice(0, 8);
-  $('.sid', li).title = s.id;
+  $('.sid', li).title = 'local_' + s.id;
   $('input', li).addEventListener('change', e => toggle(s, e.target.checked));
   $('.result', li).addEventListener('click', e => {
     if (e.target.closest('[data-confirm]')) confirmSend(s);
+  });
+  $('.rm', li).addEventListener('click', () => {
+    const d = S.dirs.find(x => x.path === li.closest('.grp').dataset.path);
+    if (d) removeMember(d, s);
   });
   return li;
 }
@@ -466,7 +580,7 @@ const FAIL = {
 };
 
 function update(s) {
-  const li = s.el, el = S.vnow - s.lastReq, gone = s.status === 'exited';
+  const li = s.el, el = S.vnow - s.lastReq, gone = down(s);
   const mode = gone ? 'gone' : s.mode;
   li.dataset.mode = mode;
 
@@ -474,7 +588,7 @@ function update(s) {
   cb.checked = s.mon; cb.disabled = gone;
 
   const dot = $('.dot', li);
-  dot.dataset.s = s.status;
+  dot.dataset.s = gone ? 'off' : s.status;
   $('.meta .st', li).textContent = gone ? '不可用' : s.status === 'busy' ? '对话进行中' : '空闲';
 
   /* 余温条 */
@@ -485,11 +599,9 @@ function update(s) {
   const tp = S.interval / TTL * 100;
   $('.tick', li).style.left = `calc(${tp}% - 1px)`;
   $('.zone', li).style.left = tp + '%';
-  const st = $('.scale .st', li);
-  st.style.left = tp + '%';
-  st.textContent = '发送点 ' + mmss(S.interval);
-  $('.since', li).textContent = s.status === 'busy' ? '对话进行中'
-    : gone ? '会话已退出'
+  $('.track', li).title = '发送点 ' + mmss(S.interval);
+  $('.since', li).textContent = gone ? (s.gone ? '会话已退出' : '未运行')
+    : s.status === 'busy' ? '对话进行中'
     : el > TTL ? `缓存已失效 ${human(el - TTL)}`
     : `最后请求 ${human(el)} 前`;
 
@@ -513,7 +625,8 @@ function update(s) {
   /* 最近一次发送 */
   const r = s.result;
   let html;
-  if (gone && s.gone) html = `<div class="res-bad">会话已退出</div><div class="res-text">${s.gone}</div>`;
+  if (s.status === 'exited' && s.gone) html = `<div class="res-bad">会话已退出</div><div class="res-text">${s.gone}</div>`;
+  else if (s.pending) html = `<div class="res-text">打开后自动恢复监控</div>`;
   else if (mode === 'expired') html = `<div class="res-text">缓存已超过 5 分钟，现在发送会按未命中缓存计费。</div><button class="btn primary" data-confirm type="button">确认并发送</button>`;
   else if (mode === 'sending') html = `<div class="res-text">正在发送「${esc(S.content)}」…</div>`;
   else if (!r) html = `<div class="res-none">尚未发送</div>`;
@@ -521,11 +634,10 @@ function update(s) {
   else { const f = FAIL[r.kind]; html = `<div class="res-bad">${f[0]}（${f[1]}）</div><div class="res-text">${f[2]}</div>`; }
   if (s._html !== html) { $('.result', li).innerHTML = html; s._html = html; }
 }
-const esc = t => t.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 
 /* ============ 行为 ============ */
 function toggle(s, on) {
-  if (s.status === 'exited') return;
+  if (down(s)) return;
   s.mon = on; s.streak = 0;
   if (!on) { s.mode = 'off'; if (s.result && !s.result.ok) s.result = null; return render(); }
   s.result = s.result && s.result.ok ? s.result : null;
@@ -539,7 +651,7 @@ function send(s) {
   s.mode = 'sending';
   update(s);
   setTimeout(() => {
-    if (s.status === 'exited' || s.mode !== 'sending') return;
+    if (down(s) || s.mode !== 'sending') return;
     const kind = s.failKind;
     if (!s.failSticky) s.failKind = null;
     if (kind) {
@@ -564,19 +676,19 @@ function tick(dt) {
   S.vnow += dt * S.speed;
   for (const s of S.sessions) {
     if (s.status === 'busy' && s.busyUntil && S.vnow >= s.busyUntil) { s.status = 'idle'; s.busyUntil = null; humanRequest(s); }
-    if (s.mode === 'watch' && s.status !== 'exited') {
+    if (s.mode === 'watch' && !down(s)) {
       if (s.streak >= cap()) { s.mode = 'capped'; continue; }
       const el = S.vnow - s.lastReq;
       if (s.status === 'busy') continue;
       if (el >= S.interval) { if (el > TTL) s.mode = 'expired'; else send(s); }
     }
-    if (s.el) update(s);
+    if (s.el && s.el.isConnected) update(s);
   }
   S.dirs.forEach(updateGroup);
 }
 
 function humanRequest(s) {            // 其他新请求：重新计时，连续次数归零
-  s.lastReq = S.vnow; s.streak = 0;
+  s.lastReq = S.vnow; s.updated = S.vnow; s.streak = 0;
   if (s.mode === 'expired') s.mode = 'watch';
 }
 
@@ -595,15 +707,18 @@ const ICON = {
   up: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 11V3M3.5 6.5 7 3l3.5 3.5"/></svg>',
   down: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3v8M3.5 7.5 7 11l3.5-3.5"/></svg>',
   x: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3.5 3.5l7 7M10.5 3.5l-7 7"/></svg>',
+  plus: '<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M7 2.5v9M2.5 7h9"/></svg>',
 };
 
 function buildGroup(d, i, resort) {
-  const members = S.sessions.filter(s => owner(s) === d);
-  if (!d.ids || resort) d.ids = members.sort((a, b) => b.lastReq - a.lastReq).map(s => s.id);   // 只在刷新时重排，避免点击时行跳动
+  const members = d.members.map(find).filter(Boolean);
+  if (!d.ids || resort || d.resort) d.ids = members.sort((a, b) => b.lastReq - a.lastReq).map(s => s.id);   // 只在刷新、添加会话时重排，避免点击时行跳动
+  d.resort = false;
   d.ids = [...d.ids.filter(id => members.some(s => s.id === id)), ...members.filter(s => !d.ids.includes(s.id)).map(s => s.id)];
   const li = document.createElement('li');
   li.className = 'grp';
   li.dataset.collapsed = d.collapsed;
+  li.dataset.path = d.path;
   const label = dirLabel(d);
   li.innerHTML = `
     <div class="ghead" title="${esc(d.path)}">
@@ -612,14 +727,15 @@ function buildGroup(d, i, resort) {
       <span class="gname">${esc(label)}</span>
       <span class="gsum"></span>
       <span class="gact">
+        <button class="iconbtn" data-act="add" type="button" title="添加会话" aria-label="添加会话到 ${esc(label)}">${ICON.plus}</button>
         <button class="iconbtn" data-act="up" type="button" title="上移" aria-label="上移 ${esc(label)}" ${i === 0 ? 'disabled' : ''}>${ICON.up}</button>
         <button class="iconbtn" data-act="down" type="button" title="下移" aria-label="下移 ${esc(label)}" ${i === S.dirs.length - 1 ? 'disabled' : ''}>${ICON.down}</button>
-        <button class="iconbtn" data-act="rm" type="button" title="移除目录，停止其下所有会话的监控" aria-label="移除 ${esc(label)}">${ICON.x}</button>
+        <button class="iconbtn" data-act="rm" type="button" title="移除工作区，停止其下所有会话的监控" aria-label="移除 ${esc(label)}">${ICON.x}</button>
       </span>
     </div>
     <ul class="grows"></ul>`;
   const ul = $('.grows', li);
-  const rows = d.ids.map(id => S.sessions.find(s => s.id === id)).map(s => {
+  const rows = d.ids.map(find).map(s => {
     const row = s.el || buildRow(s);
     const sub = s.cwd === d.path ? '' : s.cwd.slice(d.path.length + 1);
     const dirEl = $('.dir', row);
@@ -627,20 +743,22 @@ function buildGroup(d, i, resort) {
     return row;
   });
   if (rows.length) ul.append(...rows);
-  else ul.innerHTML = '<li class="gempty">没有正在运行的会话</li>';
+  else ul.innerHTML = '<li class="gempty">还没有监控的会话<button class="btn sm" data-act="add-empty" type="button">添加会话</button></li>';   // 常驻可见，空工作区不依赖悬停
   $('.ghead', li).addEventListener('click', e => {
     const act = e.target.closest('[data-act]');
-    if (act) { ({ up: () => moveDir(d, -1), down: () => moveDir(d, 1), rm: () => removeDir(d) })[act.dataset.act](); return; }
+    if (act) { ({ add: () => openAdd(d), up: () => moveDir(d, -1), down: () => moveDir(d, 1), rm: () => removeDir(d) })[act.dataset.act](); return; }
     d.collapsed = !d.collapsed; save(); li.dataset.collapsed = d.collapsed;
     const c = $('.chev', li); c.setAttribute('aria-expanded', !d.collapsed); c.setAttribute('aria-label', `${d.collapsed ? '展开' : '折叠'} ${label}`);
   });
+  const ae = $('[data-act=add-empty]', li);
+  if (ae) ae.onclick = () => openAdd(d);
   d.el = li;
   return li;
 }
 
 function updateGroup(d) {
   if (!d.el) return;
-  const m = S.sessions.filter(s => owner(s) === d);
+  const m = d.members.map(find).filter(Boolean);
   const mon = m.filter(s => s.mon && ['watch', 'sending'].includes(s.mode)).length;
   const bad = m.filter(s => s.mode === 'failed').length;
   const cold = m.filter(s => s.mode === 'expired').length;
@@ -654,33 +772,114 @@ function render(resort = false) {
   rowsEl.replaceChildren(...S.dirs.map((d, i) => buildGroup(d, i, resort)));
   $('#empty').hidden = !none;
   $('.cols').style.display = none ? 'none' : '';
-  const vis = S.sessions.filter(owner);
+  const vis = S.dirs.flatMap(d => d.members).map(find).filter(Boolean);
   const pick = $('#pick'), cur = pick.value;
   pick.innerHTML = vis.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
   if (cur && vis.some(s => s.id === cur)) pick.value = cur;
   vis.forEach(update);
   S.dirs.forEach(d => { d._sum = null; updateGroup(d); });
+  save();
 }
 const picked = () => S.sessions.find(s => s.id === $('#pick').value);
 
-/* 添加目录（原型用列表代替系统对话框） */
+/* ============ 弹层（添加会话、检查更新共用） ============ */
+const M = {
+  cfg: null,
+  open(cfg) {
+    this.cfg = cfg;
+    $('#m-title').textContent = cfg.title;
+    const sub = $('#m-sub'); sub.textContent = cfg.sub || ''; sub.hidden = !cfg.sub;
+    const body = $('#m-body');
+    if (typeof cfg.body === 'string') body.innerHTML = cfg.body; else body.replaceChildren(cfg.body);
+    this.actions(cfg.actions);
+    $('#modal').hidden = false;
+  },
+  actions(list) {
+    $('#m-foot').replaceChildren(...list.map(a => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'btn' + (a.primary ? ' primary' : ''); b.textContent = a.label; b.disabled = !!a.disabled; b.onclick = a.on;
+      return b;
+    }));
+    $('#m-foot').hidden = list.length === 0;
+    const p = $('#m-foot .primary:not(:disabled)'); if (p) p.focus();
+  },
+  close() { $('#modal').hidden = true; this.cfg = null; },
+  esc() { if (this.cfg && this.cfg.onEsc) this.cfg.onEsc(); },
+};
+$('#modal').addEventListener('mousedown', e => { if (e.target === $('#modal')) M.esc(); });
+
+/* 添加会话（5.5） */
+function openAdd(d) {
+  const cands = S.sessions
+    .filter(s => !s.archived && owner(s) === d && !S.dirs.some(x => x.members.includes(s.id)))
+    .sort((a, b) => b.updated - a.updated);                                  // 按更新时间倒序，已被监控的排除
+  const sel = new Set();
+  const body = document.createElement('div');
+  if (!cands.length) body.innerHTML = '<div class="mnone">没有可添加的会话</div>';
+  for (const s of cands) {
+    const row = document.createElement('label');
+    row.className = 'citem';
+    row.innerHTML = `<input type="checkbox"><span class="ct">${esc(s.name)}</span><code title="local_${s.id}">${s.id.slice(0, 8)}</code>`;   // 只显示标题和会话号
+    $('input', row).addEventListener('change', e => { e.target.checked ? sel.add(s.id) : sel.delete(s.id); refresh(); });
+    body.append(row);
+  }
+  const doAdd = () => {
+    d.members.push(...sel); d.resort = true; M.close(); render();
+  };
+  const refresh = () => M.actions([
+    { label: '取消', on: () => M.close() },
+    { label: sel.size ? `添加 ${sel.size} 个` : '添加', primary: true, disabled: !sel.size, on: doAdd },
+  ]);
+  M.open({ title: '添加会话', sub: dirLabel(d), body, actions: [], onEsc: () => M.close() });
+  refresh();
+}
+
+/* ============ 添加工作区（原型用列表代替系统对话框） ============ */
 const pop = $('#pop'), addBtn = $('#add-dir');
-function openPop(open) {
+function openPop(open, anchor) {
   pop.hidden = !open; addBtn.setAttribute('aria-expanded', open);
   if (!open) return;
+  const w = $('.window').getBoundingClientRect(), a = anchor.getBoundingClientRect();
+  pop.style.top = (a.bottom - w.top + 6) + 'px';
+  if (anchor === addBtn) { pop.style.right = (w.right - a.right) + 'px'; pop.style.left = 'auto'; }
+  else { pop.style.left = (a.left - w.left) + 'px'; pop.style.right = 'auto'; }
   const items = [...SEED_DIRS, ...CANDIDATES].filter(p => !S.dirs.some(d => d.path === p));
   $('#pop-items').innerHTML = items.length
     ? items.map(p => `<button class="pitem" type="button" data-path="${esc(p)}"><b>${esc(base(p))}</b><span>${esc(home(p))}</span></button>`).join('')
     : '<div class="pnone">没有更多可添加的目录</div>';
 }
-addBtn.onclick = e => { e.stopPropagation(); openPop(pop.hidden); };
-$('#add-dir-empty').onclick = e => { e.stopPropagation(); openPop(true); };
+addBtn.onclick = e => { e.stopPropagation(); openPop(pop.hidden, addBtn); };
+$('#add-dir-empty').onclick = e => { e.stopPropagation(); openPop(true, e.currentTarget); };
 pop.addEventListener('click', e => { const b = e.target.closest('[data-path]'); if (b) { addDir(b.dataset.path); openPop(false); } });
 document.addEventListener('click', e => { if (!pop.hidden && !pop.contains(e.target)) openPop(false); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') openPop(false); });
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  if (!pop.hidden) openPop(false); else M.esc();
+});
 
-/* ============ 设置 ============ */
-$('#content').addEventListener('input', e => { S.content = e.target.value.trim() || S.content; e.target.setAttribute('aria-invalid', !e.target.value.trim()); });
+/* ============ 设置：发送内容铅笔编辑（9.1） ============ */
+const ifield = $('#ifield'), content = $('#content'), conerr = $('#conerr');
+function editMode(on) {
+  ifield.dataset.state = on ? 'edit' : 'view';
+  content.readOnly = !on;
+  content.value = S.content;
+  content.setAttribute('aria-invalid', 'false'); conerr.textContent = '';
+  if (on) { content.focus(); content.select(); } else content.blur();
+}
+function saveContent() {
+  const v = content.value.trim();
+  if (!v) { content.setAttribute('aria-invalid', 'true'); conerr.textContent = '发送内容不能为空。'; return; }   // 校验不通过，留在编辑状态
+  S.content = v; editMode(false); save();
+}
+$('[data-edit]', ifield).onclick = () => editMode(true);
+$('[data-ok]', ifield).onclick = saveContent;
+$('[data-no]', ifield).onclick = () => editMode(false);
+content.addEventListener('keydown', e => {
+  if (ifield.dataset.state !== 'edit') return;
+  if (e.key === 'Enter') { e.preventDefault(); saveContent(); }
+  else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); editMode(false); }
+});
+/* 空闲间隔保持直接编辑、实时校验（不改） */
 $('#interval').addEventListener('input', e => {
   const m = e.target.value.trim().match(/^(\d{1,2}):(\d{2})$/) || e.target.value.trim().match(/^(\d{1,3})$/);
   let sec = null;
@@ -688,8 +887,78 @@ $('#interval').addEventListener('input', e => {
   const bad = sec === null || sec < MIN_I || sec > MAX_I;
   e.target.setAttribute('aria-invalid', bad);
   $('#interr').textContent = bad ? `间隔需在 ${mmss(MIN_I)} 到 ${mmss(MAX_I)} 之间，格式如 4:30。` : '';
-  if (!bad) { S.interval = sec; save(); render(); }
+  if (!bad) { S.interval = sec; render(); }
 });
+
+/* ============ 检查更新（第 14 节）：模拟菜单栏 + 通用步骤弹层 ============ */
+const UP = { cur: '0.2.0', active: false, timer: null };
+const cmpVer = (a, b) => { const x = a.split('.').map(Number), y = b.split('.').map(Number); for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] - y[i]; return 0; };
+const monCount = () => S.sessions.filter(s => s.mon && MON_MODES.includes(s.mode)).length;
+function upEnd() { clearInterval(UP.timer); clearTimeout(UP.timer); UP.active = false; M.close(); }
+function upStep(name, data = {}) {
+  clearInterval(UP.timer); clearTimeout(UP.timer);
+  const T = 'Keepwarm 更新', txt = (m, small) => `<div class="mtext">${m}${small ? `<small>${small}</small>` : ''}</div>`;
+  const close = { label: '取消', on: upEnd }, ok = { label: '好', primary: true, on: upEnd };
+  const scn = $('#upscn').value;
+  const open = (body, actions, extra = {}) => M.open({ title: T, body, actions, ...extra });
+  if (name === 'checking') {
+    open(txt('正在检查更新…'), [close], { onEsc: upEnd });
+    UP.timer = setTimeout(() => {
+      if (scn === 'net') return upStep('error', { msg: '无法连接到 GitHub，请检查网络或代理后重试', retry: 'checking' });
+      const latest = scn === 'latest' ? UP.cur : '0.3.0';
+      if (cmpVer(latest, UP.cur) <= 0) upStep('latest'); else upStep('available', { latest });
+    }, 1100);
+  } else if (name === 'latest') {
+    open(txt(`当前已是最新版本 v${UP.cur}`), [ok], { onEsc: upEnd });
+  } else if (name === 'available') {
+    open(txt(`发现新版本 v${data.latest}（当前 v${UP.cur}）`), [close, { label: '更新', primary: true, on: () => upStep('downloading', data) }], { onEsc: upEnd });
+  } else if (name === 'downloading') {
+    const total = 45.0; let got = 0;
+    const body = document.createElement('div');
+    body.innerHTML = `<div class="mtext">正在下载 v${data.latest}…</div><div class="prog"><i></i></div><div class="mtext"><small id="up-sz"></small></div>`;
+    open(body, [close], { onEsc: upEnd });
+    UP.timer = setInterval(() => {
+      got = Math.min(total, got + 1.7);
+      $('.prog i', body).style.width = (got / total * 100) + '%';
+      $('#up-sz', body).textContent = `已下载 ${got.toFixed(1)} / ${total.toFixed(1)} MB`;
+      if (got >= total) {
+        clearInterval(UP.timer);
+        if (scn === 'badsum') upStep('error', { msg: '安装包校验失败，已删除，请重试', retry: 'downloading', data });
+        else upStep('ready', data);
+      }
+    }, 100);
+  } else if (name === 'ready') {
+    const n = monCount();
+    open(txt(`v${data.latest} 已下载完成，安装后应用会自动重启`, n ? `当前有 ${n} 个会话在监控，监控会在重启后自动恢复，连续次数归零。` : ''),
+      [close, { label: '安装', primary: true, on: () => upStep('installing', data) }], { onEsc: upEnd });
+  } else if (name === 'installing') {
+    if (scn === 'nowrite') {
+      return open(txt('没有权限覆盖当前应用', '已在 Finder 中打开安装包，请手动把 Keepwarm 拖进「应用程序」。'), [ok], { onEsc: upEnd });
+    }
+    open(txt('正在安装，应用即将重启…'), []);
+    UP.timer = setTimeout(() => {                                   // 模拟：退出 → 替换 → 重启
+      const w = $('.window');
+      w.animate([{ opacity: 1 }, { opacity: 0 }, { opacity: 0 }, { opacity: 1 }], { duration: 1200 });
+      setTimeout(() => {
+        UP.cur = data.latest; upEnd();
+        S.sessions.forEach(s => { if (s.mon) s.streak = 0; });
+        render();
+        notify('Keepwarm 已更新', `当前版本 v${UP.cur}，${monCount() ? '监控已自动恢复。' : '重启完成。'}`);
+      }, 600);
+    }, 1500);
+  } else if (name === 'error') {
+    const actions = [{ label: '关闭', on: upEnd }];
+    if (data.retry) actions.unshift({ label: '重试', primary: true, on: () => upStep(data.retry, data.data) });
+    open(`<div class="mtext bad">${esc(data.msg)}</div>`, actions, { onEsc: upEnd });
+  }
+}
+function checkUpdate() { if (UP.active) return; UP.active = true; upStep('checking'); }
+
+const mmenu = $('#mmenu'), miApp = $('#mi-app');
+const menu = on => { mmenu.hidden = !on; miApp.classList.toggle('on', on); };
+miApp.addEventListener('click', e => { e.stopPropagation(); menu(mmenu.hidden); });
+$('#mi-update').addEventListener('click', () => { menu(false); checkUpdate(); });
+document.addEventListener('click', e => { if (!mmenu.hidden && !mmenu.contains(e.target)) menu(false); });
 
 /* ============ 演示控制 ============ */
 $('#speeds').addEventListener('click', e => {
@@ -697,22 +966,32 @@ $('#speeds').addEventListener('click', e => {
   S.speed = +b.dataset.speed;
   $('#speeds').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
 });
-$('#d-req').onclick = () => { const s = picked(); if (s && s.status !== 'exited') { humanRequest(s); render(); } };
+$('#d-req').onclick = () => { const s = picked(); if (s && !down(s)) { humanRequest(s); render(); } };
 $('#d-busy').onclick = () => {
-  const s = picked(); if (!s || s.status === 'exited') return;
+  const s = picked(); if (!s || down(s)) return;
   if (s.status === 'busy') { s.status = 'idle'; s.busyUntil = null; humanRequest(s); } else s.status = 'busy';
   render();
 };
-$('#d-exit').onclick = () => {
-  const s = picked(); if (!s || s.status === 'exited') return;
+$('#d-exit').onclick = () => {                                      // 运行期间退出：自动取消勾选，并从记住的集合里去掉（6.4 第 5 条）
+  const s = picked(); if (!s || down(s)) return;
   if (s.mon) s.gone = '勾选已自动取消';
-  s.status = 'exited'; s.mon = false; s.mode = 'off'; s.streak = 0; render();
+  s.status = 'exited'; s.mon = false; s.mode = 'off'; s.streak = 0; s.pending = false; render();
 };
-$('#d-cold').onclick = () => { const s = picked(); if (s && s.status !== 'exited') { s.lastReq = S.vnow - TTL - 20; if (s.mode === 'watch') s.mode = 'expired'; render(); } };
+$('#d-open').onclick = () => {                                      // 桌面版里重新打开会话：不可用 → 可用；待恢复的会自动恢复勾选一次
+  const s = picked(); if (!s || !down(s)) return;
+  s.status = 'idle'; s.gone = null; s.lastReq = Math.max(s.lastReq, S.vnow - 30);
+  if (s.pending) { s.pending = false; restoreCheck(s); }
+  render();
+};
+$('#d-arch').onclick = () => {                                      // 桌面版里归档：刷新时自动移出工作区并停止监控（5.1 第 4 条）
+  const s = picked(); if (!s) return;
+  stop(s); s.archived = true; S.dirs.forEach(d => { d.members = d.members.filter(id => id !== s.id); }); render();
+};
+$('#d-cold').onclick = () => { const s = picked(); if (s && !down(s)) { s.lastReq = S.vnow - TTL - 20; if (s.mode === 'watch') s.mode = 'expired'; render(); } };
 $('#failkind').onchange = e => { const s = picked(); if (s) { s.failKind = e.target.value || null; s.failSticky = false; } };
 $('#pick').onchange = () => { const s = picked(); $('#failkind').value = s && s.failKind || ''; };
-$('#d-empty').onclick = () => { S.sessions.forEach(x => { x.mon = false; x.mode = 'off'; x.streak = 0; }); S.dirs = []; save(); render(); };
-$('#d-reset').onclick = () => { localStorage.removeItem('keepalive-proto'); location.reload(); };
+$('#d-empty').onclick = () => { S.sessions.forEach(stop); S.dirs = []; render(); };
+$('#d-reset').onclick = () => { localStorage.removeItem(KEY); location.reload(); };
 $('#refresh').onclick = e => {
   const b = e.currentTarget; b.classList.remove('spin'); void b.offsetWidth; b.classList.add('spin');
   render(true);
@@ -720,7 +999,7 @@ $('#refresh').onclick = e => {
 
 /* ============ 启动 ============ */
 seed();
-if (!load()) S.dirs = SEED_DIRS.map(path => ({ path, collapsed: false, ids: null }));
+if (!load()) { seedDirs(); $('#content').value = S.content; }
 render(true);
 let last = performance.now();
 setInterval(() => { const n = performance.now(); tick((n - last) / 1000); last = n; }, 200);

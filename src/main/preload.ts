@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { IPC, type KeepaliveApi, type UiState } from '../shared/ipc';
+import { IPC, type KeepaliveApi, type UiState, type UpdateState } from '../shared/ipc';
 
 const api: KeepaliveApi = {
   getState: () => ipcRenderer.invoke(IPC.getState),
@@ -17,6 +17,16 @@ const api: KeepaliveApi = {
   setChecked: (id, on) => ipcRenderer.invoke(IPC.setChecked, id, on),
   confirm: (id) => ipcRenderer.invoke(IPC.confirm, id),
   refresh: () => ipcRenderer.invoke(IPC.refresh),
+  listCandidates: (path) => ipcRenderer.invoke(IPC.listCandidates, path),
+  addSessions: (path, ids) => ipcRenderer.invoke(IPC.addSessions, path, ids),
+  removeSession: (path, id) => ipcRenderer.invoke(IPC.removeSession, path, id),
+  getUpdateState: () => ipcRenderer.invoke(IPC.getUpdateState),
+  onUpdate: (cb) => {
+    const handler = (_e: unknown, s: UpdateState) => cb(s);
+    ipcRenderer.on(IPC.update, handler);
+    return () => ipcRenderer.removeListener(IPC.update, handler);
+  },
+  updateAction: (action) => ipcRenderer.invoke(IPC.updateAction, action),
 };
 
 contextBridge.exposeInMainWorld('keepalive', api);

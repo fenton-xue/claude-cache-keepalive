@@ -12,16 +12,24 @@ export const SEND_TIMEOUT_MS = 30_000;
 export interface DirSetting {
   path: string;
   collapsed: boolean;
+  /** 用户手动添加到该工作区的会话（桌面版会话 id） */
+  members: string[];
 }
 
+/** 设置文件的当前格式版本。低于它说明是 v1.3 及以前的文件，需要做一次成员迁移（需求 5.7） */
+export const SETTINGS_SCHEMA = 2;
+
 export interface Settings {
+  schemaVersion: number;
   content: string;
   intervalSec: number;
   dirs: DirSetting[];
+  /** 记住的勾选集合（桌面版会话 id），重启后恢复监控（需求 6.4） */
+  checked: string[];
 }
 
 export function defaultSettings(): Settings {
-  return { content: DEFAULT_CONTENT, intervalSec: DEFAULT_INTERVAL_SEC, dirs: [] };
+  return { schemaVersion: SETTINGS_SCHEMA, content: DEFAULT_CONTENT, intervalSec: DEFAULT_INTERVAL_SEC, dirs: [], checked: [] };
 }
 
 /** 连续成功次数上限 = floor(7200 / 间隔秒数) */
@@ -64,15 +72,22 @@ export function normalizeSettings(raw: unknown): Settings {
   const r = raw as Record<string, unknown>;
   if (typeof r.content === 'string' && validateContent(r.content) === null) out.content = r.content.trim();
   if (typeof r.intervalSec === 'number' && validateInterval(r.intervalSec) === null) out.intervalSec = r.intervalSec;
+  if (r.schemaVersion !== SETTINGS_SCHEMA) out.schemaVersion = 1;
+  const strings = (v: unknown, seen: Set<string>): string[] =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && x !== '' && !seen.has(x) && !!seen.add(x)) : [];
   if (Array.isArray(r.dirs)) {
     const seen = new Set<string>();
+    const seenMembers = new Set<string>(); // 一个会话只属于一个工作区
     for (const d of r.dirs) {
       if (typeof d !== 'object' || d === null) continue;
-      const p = (d as Record<string, unknown>).path;
+      const rd = d as Record<string, unknown>;
+      const p = rd.path;
       if (typeof p !== 'string' || p === '' || seen.has(p)) continue;
       seen.add(p);
-      out.dirs.push({ path: p, collapsed: (d as Record<string, unknown>).collapsed === true });
+      out.dirs.push({ path: p, collapsed: rd.collapsed === true, members: strings(rd.members, seenMembers) });
     }
   }
+  const members = new Set(out.dirs.flatMap((d) => d.members));
+  out.checked = strings(r.checked, new Set()).filter((id) => members.has(id));
   return out;
 }
