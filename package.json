@@ -1,7 +1,7 @@
 {
   "name": "keepwarm",
   "productName": "Keepwarm",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "给 Claude Code 桌面版会话保活 5 分钟提示缓存的 macOS 桌面应用",
   "private": true,
   "main": "dist/main/main.js",
